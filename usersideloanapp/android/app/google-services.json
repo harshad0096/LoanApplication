@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "658404527384",
+    "project_id": "newuserapp-20164",
+    "storage_bucket": "newuserapp-20164.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:658404527384:android:b27e73af0dede468b0a26d",
+        "android_client_info": {
+          "package_name": "com.example.usersideloanapp"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBXEx_MbzujmuM3QKpEm_O3oGWtA55GTG8"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
