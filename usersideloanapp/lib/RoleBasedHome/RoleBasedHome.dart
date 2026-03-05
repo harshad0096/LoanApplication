@@ -15,46 +15,54 @@ class RoleBasedHome extends StatelessWidget {
   Widget build(BuildContext context) {
     final user = FirebaseAuth.instance.currentUser;
 
+    // ✅ NOT LOGGED IN → SHOW PUBLIC HOME
     if (user == null) {
-      return const Scaffold(body: Center(child: Text("User not logged in")));
+      return const HomePage();
     }
 
+    // ✅ LOGGED IN → FETCH ROLE
     return FutureBuilder<DocumentSnapshot>(
       future:
           FirebaseFirestore.instance.collection('users').doc(user.uid).get(),
       builder: (context, snapshot) {
+        // ⏳ Loading
         if (snapshot.connectionState == ConnectionState.waiting) {
           return const Scaffold(
             body: Center(child: CircularProgressIndicator()),
           );
         }
 
+        // ❌ No user doc → treat as applicant
         if (!snapshot.hasData || !snapshot.data!.exists) {
-          return const Scaffold(
-            body: Center(child: Text("User data not found")),
-          );
+          return const UserLayout();
         }
 
         final data = snapshot.data!.data() as Map<String, dynamic>;
 
-        final role = data['role']?.toString().toUpperCase() ?? "APPLICANT";
+        // ✅ SAFE ROLE NORMALIZATION
+        final role =
+            (data['role'] ?? "APPLICANT").toString().toUpperCase().trim();
+
+        debugPrint("🔥 USER ROLE = $role");
 
         switch (role) {
           case "ADMIN":
-            return const AdminLayout(initialRoute: '/admin/dashboard');
-          case "APPLICANT":
-            return const UserLayout();
+            return const AdminLayout(
+              initialRoute: '/admin/dashboard',
+            );
 
           case "MANAGER":
             return const ManagerHome();
 
-          case "loanOfficer":
+          case "LOANOFFICER":
+          case "LOAN_OFFICER":
             return const LoanOfficerLayout(
               initialRoute: "/loan_officer/dashboard",
             );
 
+          case "APPLICANT":
           default:
-            return const HomePage(); // Applicant
+            return const UserLayout();
         }
       },
     );
