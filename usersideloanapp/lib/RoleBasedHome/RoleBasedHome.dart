@@ -40,29 +40,27 @@ class RoleBasedHome extends StatelessWidget {
         final data = snapshot.data!.data() as Map<String, dynamic>;
 
         // ✅ SAFE ROLE NORMALIZATION
-        final role =
-            (data['role'] ?? "APPLICANT").toString().toUpperCase().trim();
+        final role = data['role']?.toString().toLowerCase() ?? "applicant";
 
         debugPrint("🔥 USER ROLE = $role");
 
         switch (role) {
-          case "ADMIN":
-            return const AdminLayout(
-              initialRoute: '/admin/dashboard',
-            );
+          case "admin":
+            return const AdminLayout(initialRoute: '/admin/dashboard');
 
-          case "MANAGER":
+          case "applicant":
+            return const UserLayout();
+
+          case "manager":
             return const ManagerHome();
 
-          case "LOANOFFICER":
-          case "LOAN_OFFICER":
+          case "loanofficer":
             return const LoanOfficerLayout(
               initialRoute: "/loan_officer/dashboard",
             );
 
-          case "APPLICANT":
           default:
-            return const UserLayout();
+            return const HomePage();
         }
       },
     );

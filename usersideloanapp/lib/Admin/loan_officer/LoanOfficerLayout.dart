@@ -26,10 +26,10 @@ class _LoanOfficerLayoutState extends State<LoanOfficerLayout> {
         return const LoanOfficerDashboardPage();
 
       case "/loan_officer/applications":
-        return const LoanOfficerDashboardPage(); // replace later
+        return const LoanOfficerDashboardPage(); // change later
 
       case "/loan_officer/verifications":
-        return const LoanOfficerDashboardPage(); // replace later
+        return const LoanOfficerDashboardPage(); // change later
 
       default:
         return const LoanOfficerDashboardPage();
@@ -41,22 +41,7 @@ class _LoanOfficerLayoutState extends State<LoanOfficerLayout> {
     final bool wide = MediaQuery.of(context).size.width > 900;
 
     return Scaffold(
-      body: Row(
-        children: [
-          if (wide)
-            SideNavbar(
-              selectedRoute: currentRoute,
-              onNavigate: (route) {
-                setState(() {
-                  currentRoute = route;
-                });
-              },
-            ),
-
-          Expanded(child: _getPage()),
-        ],
-      ),
-
+      appBar: wide ? null : AppBar(title: const Text("Loan Officer")),
       drawer: wide
           ? null
           : Drawer(
@@ -70,8 +55,20 @@ class _LoanOfficerLayoutState extends State<LoanOfficerLayout> {
                 },
               ),
             ),
-
-      appBar: wide ? null : AppBar(title: const Text("Loan Officer")),
+      body: Row(
+        children: [
+          if (wide)
+            SideNavbar(
+              selectedRoute: currentRoute,
+              onNavigate: (route) {
+                setState(() {
+                  currentRoute = route;
+                });
+              },
+            ),
+          Expanded(child: _getPage()),
+        ],
+      ),
     );
   }
 }

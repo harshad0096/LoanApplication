@@ -4,10 +4,11 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:get/get.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:usersideloanapp/homepage/Homepage.dart';
 
+import 'package:usersideloanapp/homepage/Homepage.dart';
 import 'package:usersideloanapp/Login/Login.dart';
 import 'package:usersideloanapp/Login/services/RoleBasedHome.dart';
 import 'package:usersideloanapp/splash_Screen/splashscreen.dart';
@@ -62,8 +63,9 @@ class _MyAppState extends State<MyApp> {
   }
 
   // =========================================================
-  // 🚀 APP BOOTSTRAP
+  // APP START
   // =========================================================
+
   Future<void> _bootstrapApp() async {
     try {
       if (kIsWeb) {
@@ -83,8 +85,9 @@ class _MyAppState extends State<MyApp> {
   }
 
   // =========================================================
-  // ✅ EMAIL LINK HANDLER
+  // EMAIL LINK LOGIN
   // =========================================================
+
   Future<void> _handleEmailLink() async {
     try {
       final isEmailLink = _auth.isSignInWithEmailLink(Uri.base.toString());
@@ -108,8 +111,9 @@ class _MyAppState extends State<MyApp> {
   }
 
   // =========================================================
-  // ✅ ENSURE USER PROFILE EXISTS
+  // CREATE USER PROFILE
   // =========================================================
+
   Future<void> _createUserIfNotExists() async {
     try {
       final user = _auth.currentUser;
@@ -130,10 +134,6 @@ class _MyAppState extends State<MyApp> {
           "updatedAt": FieldValue.serverTimestamp(),
           "lastLoginAt": FieldValue.serverTimestamp(),
         }, SetOptions(merge: true));
-
-        await ref.collection("notifications").doc("_init").set({
-          "createdAt": FieldValue.serverTimestamp(),
-        });
       } else {
         await ref.update({
           "lastLoginAt": FieldValue.serverTimestamp(),
@@ -145,8 +145,9 @@ class _MyAppState extends State<MyApp> {
   }
 
   // =========================================================
-  // 🚀 ROOT ROUTER
+  // ROOT ROUTER
   // =========================================================
+
   Widget _buildRoot() {
     if (!_initialized || _handlingLink) {
       return const SplashScreen();
@@ -163,7 +164,6 @@ class _MyAppState extends State<MyApp> {
 
         if (user == null) {
           return const HomePage();
-          // return LoginPage(initialRoute: '');
         }
 
         return const RoleBasedHome();
@@ -172,11 +172,12 @@ class _MyAppState extends State<MyApp> {
   }
 
   // =========================================================
-  // 🎨 APP UI
+  // GETX APP
   // =========================================================
+
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
+    return GetMaterialApp(
       debugShowCheckedModeBanner: false,
       title: "Fintech Pro",
       theme: ThemeData(
@@ -184,26 +185,33 @@ class _MyAppState extends State<MyApp> {
         scaffoldBackgroundColor: const Color(0xffF5F7FB),
         colorSchemeSeed: const Color(0xff6D5DF6),
       ),
-
-      // ✅ ROOT
       home: _buildRoot(),
+      getPages: [
+        GetPage(name: '/login', page: () => const LoginPage(initialRoute: '')),
+        GetPage(name: '/home', page: () => const RoleBasedHome()),
 
-      // ✅ ROUTES
-      routes: {
-        '/login': (_) => const LoginPage(initialRoute: ''),
-        '/home': (_) => const RoleBasedHome(),
-
-        // 🚀 LOAN FLOW
-        '/loan-step1': (_) => const LoanStep1Details(
-              loanName: '',
-            ),
-        '/loan-step2': (_) => const LoanStep2Purpose(),
-        '/loan-step3': (_) => const LoanStep3Employment(),
-        '/loan-step4': (_) => const LoanStep4Bank(),
-        '/loan-success': (context) => const LoanSuccessPage(
-              applicationId: '',
-            ),
-      },
+        // Loan Flow
+        GetPage(
+          name: '/loan-step1',
+          page: () => const LoanStep1Details(loanName: ''),
+        ),
+        GetPage(
+          name: '/loan-step2',
+          page: () => const LoanStep2Purpose(),
+        ),
+        GetPage(
+          name: '/loan-step3',
+          page: () => const LoanStep3Employment(),
+        ),
+        GetPage(
+          name: '/loan-step4',
+          page: () => const LoanStep4Bank(),
+        ),
+        GetPage(
+          name: '/loan-success',
+          page: () => const LoanSuccessPage(applicationId: ''),
+        ),
+      ],
     );
   }
 }

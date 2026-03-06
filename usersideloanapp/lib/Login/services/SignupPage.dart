@@ -12,11 +12,13 @@ class SignupPage extends StatefulWidget {
 class _SignupPageState extends State<SignupPage> {
   final _formKey = GlobalKey<FormState>();
 
+  // Controllers
   final nameController = TextEditingController();
   final emailController = TextEditingController();
   final phoneController = TextEditingController();
   final dobController = TextEditingController();
   final addressController = TextEditingController();
+  final employmentController = TextEditingController();
   final passwordController = TextEditingController();
   final confirmPasswordController = TextEditingController();
 
@@ -25,7 +27,6 @@ class _SignupPageState extends State<SignupPage> {
   bool loading = false;
   bool obscurePassword = true;
   bool obscureConfirmPassword = true;
-
   String employmentType = "Salaried";
 
   @override
@@ -41,12 +42,11 @@ class _SignupPageState extends State<SignupPage> {
   }
 
   // ======================================================
-  // 🚀 SIGNUP (PRODUCTION)
+  // 🚀 SIGNUP FUNCTION
   // ======================================================
   Future<void> signUp() async {
     if (!_formKey.currentState!.validate()) return;
 
-    // ✅ convert DOB safely
     try {
       final parts = dobController.text.split("/");
       final dobDate = DateTime(
@@ -82,39 +82,82 @@ class _SignupPageState extends State<SignupPage> {
   }
 
   // ======================================================
+  // EMAIL VERIFY DIALOG WITH COUNTDOWN
+  // ======================================================
   Future<void> _showVerifyDialog() async {
+    int countdown = 30;
+    bool canResend = false;
+
     showDialog(
       context: context,
       barrierDismissible: false,
-      builder: (_) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: const Text("Verify Your Email"),
-        content: const Text(
-          "Verification link sent to your email.\n\n"
-          "After verifying, click VERIFY.",
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text("Cancel"),
-          ),
-          ElevatedButton(
-            onPressed: () async {
-              bool verified = await _authService.checkEmailVerified();
-
-              if (!mounted) return;
-
-              if (verified) {
-                Navigator.pop(context);
-                Navigator.pushReplacementNamed(context, "/role");
+      builder: (_) {
+        return StatefulBuilder(builder: (context, setStateDialog) {
+          if (countdown > 0) {
+            Future.delayed(const Duration(seconds: 1), () {
+              if (countdown > 0) {
+                setStateDialog(() => countdown--);
               } else {
-                _showSnack("Email not verified yet");
+                setStateDialog(() => canResend = true);
               }
-            },
-            child: const Text("VERIFY"),
-          ),
-        ],
-      ),
+            });
+          }
+
+          return AlertDialog(
+            shape:
+                RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+            title: const Text("Verify Your Email"),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Text(
+                  "Verification link sent to your email.\n\n"
+                  "After verifying, click VERIFY.",
+                ),
+                const SizedBox(height: 12),
+                if (!canResend)
+                  Text(
+                    "Resend available in $countdown s",
+                    style: const TextStyle(color: Colors.grey),
+                  ),
+              ],
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text("Cancel"),
+              ),
+              if (canResend)
+                TextButton(
+                  onPressed: () async {
+                    await _authService.resendVerificationEmail();
+                    setStateDialog(() {
+                      countdown = 30;
+                      canResend = false;
+                    });
+                    _showSnack("Verification email resent");
+                  },
+                  child: const Text("Resend"),
+                ),
+              ElevatedButton(
+                onPressed: () async {
+                  bool verified = await _authService.checkEmailVerified();
+                  if (!mounted) return;
+
+                  if (verified) {
+                    Navigator.pop(context);
+                    Navigator.pushNamedAndRemoveUntil(
+                        context, "/login", (route) => false);
+                  } else {
+                    _showSnack("Email not verified yet");
+                  }
+                },
+                child: const Text("VERIFY"),
+              ),
+            ],
+          );
+        });
+      },
     );
   }
 
@@ -133,11 +176,7 @@ class _SignupPageState extends State<SignupPage> {
       ),
       body: LayoutBuilder(
         builder: (context, constraints) {
-          if (constraints.maxWidth < 900) {
-            return _mobileView();
-          } else {
-            return _webView();
-          }
+          return constraints.maxWidth < 900 ? _mobileView() : _webView();
         },
       ),
     );
@@ -161,7 +200,6 @@ class _SignupPageState extends State<SignupPage> {
     );
   }
 
-  // ======================================================
   Widget _mobileView() {
     return SafeArea(
       child: SingleChildScrollView(
@@ -238,8 +276,8 @@ class _SignupPageState extends State<SignupPage> {
         boxShadow: [
           BoxShadow(
             color: Colors.grey.shade300,
-            blurRadius: 20,
-            spreadRadius: 5,
+            blurRadius: 24,
+            spreadRadius: 6,
           ),
         ],
       ),
@@ -267,7 +305,15 @@ class _SignupPageState extends State<SignupPage> {
                     height: 50,
                     child: ElevatedButton(
                       onPressed: signUp,
-                      child: const Text("Sign Up"),
+                      style: ElevatedButton.styleFrom(
+                        shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12)),
+                        backgroundColor: const Color(0xff7F00FF),
+                      ),
+                      child: const Text(
+                        "Sign Up",
+                        style: TextStyle(fontSize: 18),
+                      ),
                     ),
                   ),
           ],
@@ -281,20 +327,24 @@ class _SignupPageState extends State<SignupPage> {
     double fieldWidth = isWeb ? 260 : double.infinity;
 
     return [
-      SizedBox(
-        width: fieldWidth,
-        child: _input(nameController, "Full Name", Icons.person),
-      ),
-      SizedBox(
-        width: fieldWidth,
-        child: _input(emailController, "Email", Icons.email_outlined),
-      ),
-      SizedBox(
-        width: fieldWidth,
-        child: _input(phoneController, "Phone Number", Icons.phone),
-      ),
-
-      // ✅ DOB picker
+      _field(nameController, "Full Name", Icons.person, fieldWidth),
+      _field(emailController, "Email", Icons.email_outlined, fieldWidth,
+          validator: (v) {
+        if (v == null || v.trim().isEmpty) return "Email is required";
+        if (!RegExp(r'^[\w-.]+@([\w-]+\.)+[\w-]{2,4}$').hasMatch(v)) {
+          return "Enter valid email";
+        }
+        return null;
+      }),
+      _field(phoneController, "Phone Number", Icons.phone, fieldWidth,
+          validator: (v) {
+        if (v == null || v.isEmpty) return "Phone Number is required";
+        if (!RegExp(r'^[6-9]\d{9}$').hasMatch(v)) {
+          return "Enter valid 10-digit number";
+        }
+        return null;
+      }),
+      // DOB picker
       SizedBox(
         width: fieldWidth,
         child: TextFormField(
@@ -305,8 +355,7 @@ class _SignupPageState extends State<SignupPage> {
             prefixIcon: const Icon(Icons.calendar_today),
             border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
           ),
-          validator: (v) =>
-              v == null || v.isEmpty ? "Date of Birth is required" : null,
+          validator: (v) => v == null || v.isEmpty ? "DOB required" : null,
           onTap: () async {
             DateTime? picked = await showDatePicker(
               context: context,
@@ -321,12 +370,7 @@ class _SignupPageState extends State<SignupPage> {
           },
         ),
       ),
-
-      SizedBox(
-        width: fieldWidth,
-        child: _input(addressController, "Address", Icons.home),
-      ),
-
+      _field(addressController, "Address", Icons.home, fieldWidth),
       SizedBox(
         width: fieldWidth,
         child: DropdownButtonFormField<String>(
@@ -338,90 +382,69 @@ class _SignupPageState extends State<SignupPage> {
           items: const [
             DropdownMenuItem(value: "Salaried", child: Text("Salaried")),
             DropdownMenuItem(
-              value: "Self Employed",
-              child: Text("Self Employed"),
-            ),
+                value: "Self Employed", child: Text("Self Employed")),
           ],
           onChanged: (v) => setState(() => employmentType = v!),
         ),
       ),
-
-      SizedBox(
-        width: fieldWidth,
-        child: _passwordField(
-          controller: passwordController,
-          label: "Password",
-          obscure: obscurePassword,
-          toggle: () => setState(() => obscurePassword = !obscurePassword),
-        ),
-      ),
-
-      SizedBox(
-        width: fieldWidth,
-        child: _passwordField(
-          controller: confirmPasswordController,
-          label: "Confirm Password",
-          obscure: obscureConfirmPassword,
-          toggle: () =>
-              setState(() => obscureConfirmPassword = !obscureConfirmPassword),
-          validator: (v) =>
-              v != passwordController.text ? "Passwords do not match" : null,
-        ),
-      ),
+      _passwordField(passwordController, "Password", obscurePassword, () {
+        setState(() => obscurePassword = !obscurePassword);
+      }, fieldWidth),
+      _passwordField(
+          confirmPasswordController,
+          "Confirm Password",
+          obscureConfirmPassword,
+          () {
+            setState(() => obscureConfirmPassword = !obscureConfirmPassword);
+          },
+          fieldWidth,
+          validator: (v) {
+            if (v != passwordController.text) return "Passwords do not match";
+            return null;
+          }),
     ];
   }
 
   // ======================================================
-  Widget _input(TextEditingController controller, String label, IconData icon) {
-    return TextFormField(
-      controller: controller,
-      decoration: InputDecoration(
-        labelText: label,
-        prefixIcon: Icon(icon),
-        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+  Widget _field(TextEditingController controller, String label, IconData icon,
+      double width,
+      {String? Function(String?)? validator}) {
+    return SizedBox(
+      width: width,
+      child: TextFormField(
+        controller: controller,
+        validator: validator ??
+            (v) => v == null || v.trim().isEmpty ? "$label is required" : null,
+        decoration: InputDecoration(
+          labelText: label,
+          prefixIcon: Icon(icon),
+          border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+        ),
       ),
-      validator: (v) {
-        if (v == null || v.trim().isEmpty) {
-          return "$label is required";
-        }
-
-        if (label == "Email" &&
-            !RegExp(r'^[\w-.]+@([\w-]+\.)+[\w-]{2,4}$').hasMatch(v)) {
-          return "Enter valid email";
-        }
-
-        if (label == "Phone Number" && !RegExp(r'^[6-9]\d{9}$').hasMatch(v)) {
-          return "Enter valid 10-digit mobile number";
-        }
-
-        return null;
-      },
     );
   }
 
-  // ======================================================
-  Widget _passwordField({
-    required TextEditingController controller,
-    required String label,
-    required bool obscure,
-    required VoidCallback toggle,
-    String? Function(String?)? validator,
-  }) {
-    return TextFormField(
-      controller: controller,
-      obscureText: obscure,
-      validator: validator ??
-          (v) => v == null || v.length < 8
-              ? "Minimum 8 characters required"
-              : null,
-      decoration: InputDecoration(
-        labelText: label,
-        prefixIcon: const Icon(Icons.lock_outline),
-        suffixIcon: IconButton(
-          icon: Icon(obscure ? Icons.visibility_off : Icons.visibility),
-          onPressed: toggle,
+  Widget _passwordField(TextEditingController controller, String label,
+      bool obscure, VoidCallback toggle, double width,
+      {String? Function(String?)? validator}) {
+    return SizedBox(
+      width: width,
+      child: TextFormField(
+        controller: controller,
+        obscureText: obscure,
+        validator: validator ??
+            (v) => v == null || v.length < 8
+                ? "Minimum 8 characters required"
+                : null,
+        decoration: InputDecoration(
+          labelText: label,
+          prefixIcon: const Icon(Icons.lock_outline),
+          suffixIcon: IconButton(
+            icon: Icon(obscure ? Icons.visibility_off : Icons.visibility),
+            onPressed: toggle,
+          ),
+          border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
         ),
-        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
       ),
     );
   }

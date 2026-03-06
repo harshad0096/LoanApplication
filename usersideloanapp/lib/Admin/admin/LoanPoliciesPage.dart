@@ -79,6 +79,45 @@ class _LoanPoliciesPageState extends State<LoanPoliciesPage> {
     });
   }
 
+  //delete policy from firebase
+  Future<void> _deletePolicy(LoanPolicy policy) async {
+    await _firestore.collection("loan_policies").doc(policy.id).delete();
+
+    setState(() {
+      policies.removeWhere((p) => p.id == policy.id);
+    });
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text("Policy Deleted")),
+    );
+  }
+
+  void _confirmDeletePolicy(LoanPolicy policy) {
+    showDialog(
+      context: context,
+      builder: (_) {
+        return AlertDialog(
+          title: const Text("Delete Policy"),
+          content: Text("Are you sure you want to delete ${policy.title}?"),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text("Cancel"),
+            ),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+              onPressed: () async {
+                Navigator.pop(context);
+                await _deletePolicy(policy);
+              },
+              child: const Text("Delete"),
+            )
+          ],
+        );
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -101,6 +140,16 @@ class _LoanPoliciesPageState extends State<LoanPoliciesPage> {
               style: GoogleFonts.inter(color: Colors.grey),
             ),
             const SizedBox(height: 24),
+            ElevatedButton.icon(
+              icon: const Icon(Icons.add),
+              label: const Text("New Policy"),
+              style: ElevatedButton.styleFrom(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+              ),
+              onPressed: _openCreatePolicyDialog,
+            ),
+            const SizedBox(height: 20),
             Expanded(
               child: GridView.builder(
                 itemCount: policies.length,
@@ -119,6 +168,145 @@ class _LoanPoliciesPageState extends State<LoanPoliciesPage> {
           ],
         ),
       ),
+    );
+  }
+
+  void _openCreatePolicyDialog() {
+    final titleController = TextEditingController();
+    final minAmountController = TextEditingController();
+    final maxAmountController = TextEditingController();
+    final minTenureController = TextEditingController();
+    final maxTenureController = TextEditingController();
+    final processingController = TextEditingController();
+
+    double interest = 10;
+
+    showDialog(
+      context: context,
+      builder: (_) {
+        return StatefulBuilder(
+          builder: (context, setModal) {
+            return Dialog(
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
+              ),
+              child: Padding(
+                padding: const EdgeInsets.all(24),
+                child: SizedBox(
+                  width: 500,
+                  child: SingleChildScrollView(
+                    child: Column(
+                      children: [
+                        Text(
+                          "Create New Loan Policy",
+                          style: GoogleFonts.inter(
+                            fontSize: 20,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        const SizedBox(height: 20),
+                        TextField(
+                          controller: titleController,
+                          decoration: const InputDecoration(
+                            labelText: "Loan Title",
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+                        TextField(
+                          controller: minAmountController,
+                          decoration: const InputDecoration(
+                            labelText: "Minimum Amount",
+                          ),
+                          keyboardType: TextInputType.number,
+                        ),
+                        const SizedBox(height: 16),
+                        TextField(
+                          controller: maxAmountController,
+                          decoration: const InputDecoration(
+                            labelText: "Maximum Amount",
+                          ),
+                          keyboardType: TextInputType.number,
+                        ),
+                        const SizedBox(height: 16),
+                        TextField(
+                          controller: minTenureController,
+                          decoration: const InputDecoration(
+                            labelText: "Min Tenure (months)",
+                          ),
+                          keyboardType: TextInputType.number,
+                        ),
+                        const SizedBox(height: 16),
+                        TextField(
+                          controller: maxTenureController,
+                          decoration: const InputDecoration(
+                            labelText: "Max Tenure (months)",
+                          ),
+                          keyboardType: TextInputType.number,
+                        ),
+                        const SizedBox(height: 16),
+                        TextField(
+                          controller: processingController,
+                          decoration: const InputDecoration(
+                            labelText: "Processing Fee %",
+                          ),
+                          keyboardType: TextInputType.number,
+                        ),
+                        const SizedBox(height: 20),
+                        Text(
+                          "Interest Rate : ${interest.toStringAsFixed(1)}%",
+                        ),
+                        Slider(
+                          min: 5,
+                          max: 20,
+                          value: interest,
+                          onChanged: (v) => setModal(() => interest = v),
+                        ),
+                        const SizedBox(height: 20),
+                        ElevatedButton(
+                          onPressed: () async {
+                            String id = titleController.text
+                                .toLowerCase()
+                                .replaceAll(" ", "_");
+
+                            LoanPolicy newPolicy = LoanPolicy(
+                              id: id,
+                              title: titleController.text,
+                              icon: Icons.account_balance,
+                              color: Colors.purple,
+                              interest: interest,
+                              minAmount: int.parse(minAmountController.text),
+                              maxAmount: int.parse(maxAmountController.text),
+                              minTenure: int.parse(minTenureController.text),
+                              maxTenure: int.parse(maxTenureController.text),
+                              processingFee:
+                                  double.parse(processingController.text),
+                            );
+
+                            policies.add(newPolicy);
+
+                            await _savePolicyToFirebase(newPolicy);
+
+                            setState(() {});
+
+                            Navigator.pop(context);
+
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text("New Policy Created"),
+                              ),
+                            );
+                          },
+                          child: const Text("Create Policy"),
+                        )
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            );
+          },
+        );
+      },
     );
   }
 
@@ -141,6 +329,10 @@ class _LoanPoliciesPageState extends State<LoanPoliciesPage> {
                 IconButton(
                   icon: const Icon(Icons.edit_outlined),
                   onPressed: () => _openEditDialog(p),
+                ),
+                IconButton(
+                  icon: const Icon(Icons.delete_outline, color: Colors.red),
+                  onPressed: () => _confirmDeletePolicy(p),
                 ),
               ],
             ),
@@ -178,57 +370,125 @@ class _LoanPoliciesPageState extends State<LoanPoliciesPage> {
   }
 
   void _openEditDialog(LoanPolicy policy) {
+    final interestController =
+        TextEditingController(text: policy.interest.toString());
+    final minAmountController =
+        TextEditingController(text: policy.minAmount.toString());
+    final maxAmountController =
+        TextEditingController(text: policy.maxAmount.toString());
+    final minTenureController =
+        TextEditingController(text: policy.minTenure.toString());
+    final maxTenureController =
+        TextEditingController(text: policy.maxTenure.toString());
+    final processingController =
+        TextEditingController(text: policy.processingFee.toString());
+
     showDialog(
       context: context,
       builder: (_) {
-        return StatefulBuilder(
-          builder: (context, setModal) {
-            return Dialog(
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(16),
-              ),
-              child: Padding(
-                padding: const EdgeInsets.all(24),
-                child: SizedBox(
-                  width: 480,
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(
-                        "Edit ${policy.title}",
-                        style: GoogleFonts.inter(
-                            fontSize: 18, fontWeight: FontWeight.w600),
+        return Dialog(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: SizedBox(
+              width: 480,
+              child: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      "Edit ${policy.title}",
+                      style: GoogleFonts.inter(
+                        fontSize: 18,
+                        fontWeight: FontWeight.w600,
                       ),
-                      const SizedBox(height: 20),
-                      Slider(
-                        min: 5,
-                        max: 20,
-                        value: policy.interest,
-                        onChanged: (v) => setModal(() => policy.interest = v),
-                      ),
-                      const SizedBox(height: 20),
-                      ElevatedButton(
-                        onPressed: () async {
-                          await _savePolicyToFirebase(policy);
-                          setState(() {});
-                          Navigator.pop(context);
+                    ),
 
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
-                              content: Text("Policy Saved to Firebase"),
-                            ),
-                          );
-                        },
-                        child: const Text("Save Changes"),
-                      )
-                    ],
-                  ),
+                    const SizedBox(height: 20),
+
+                    /// INTEREST
+                    _editField("Interest Rate (%)", interestController),
+
+                    /// MIN AMOUNT
+                    _editField("Min Amount", minAmountController),
+
+                    /// MAX AMOUNT
+                    _editField("Max Amount", maxAmountController),
+
+                    /// MIN TENURE
+                    _editField("Min Tenure (Months)", minTenureController),
+
+                    /// MAX TENURE
+                    _editField("Max Tenure (Months)", maxTenureController),
+
+                    /// PROCESSING FEE
+                    _editField("Processing Fee (%)", processingController),
+
+                    const SizedBox(height: 20),
+
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.end,
+                      children: [
+                        TextButton(
+                          onPressed: () => Navigator.pop(context),
+                          child: const Text("Cancel"),
+                        ),
+                        const SizedBox(width: 10),
+                        ElevatedButton(
+                          onPressed: () async {
+                            policy.interest =
+                                double.parse(interestController.text);
+                            policy.minAmount =
+                                int.parse(minAmountController.text);
+                            policy.maxAmount =
+                                int.parse(maxAmountController.text);
+                            policy.minTenure =
+                                int.parse(minTenureController.text);
+                            policy.maxTenure =
+                                int.parse(maxTenureController.text);
+                            policy.processingFee =
+                                double.parse(processingController.text);
+
+                            await _savePolicyToFirebase(policy);
+
+                            setState(() {});
+                            Navigator.pop(context);
+
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text("Policy Updated Successfully"),
+                              ),
+                            );
+                          },
+                          child: const Text("Save Changes"),
+                        ),
+                      ],
+                    )
+                  ],
                 ),
               ),
-            );
-          },
+            ),
+          ),
         );
       },
+    );
+  }
+
+  Widget _editField(String label, TextEditingController controller) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 14),
+      child: TextField(
+        controller: controller,
+        keyboardType: TextInputType.number,
+        decoration: InputDecoration(
+          labelText: label,
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(10),
+          ),
+        ),
+      ),
     );
   }
 }

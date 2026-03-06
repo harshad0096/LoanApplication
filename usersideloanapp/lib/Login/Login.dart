@@ -28,27 +28,32 @@ class _LoginPageState extends State<LoginPage> {
     super.dispose();
   }
 
+  //login function
   Future<void> login() async {
     if (!_formKey.currentState!.validate()) return;
 
     setState(() => loading = true);
 
-    String? result = (await _authService.login(
+    final result = await _authService.login(
       email: emailController.text.trim(),
       password: passwordController.text.trim(),
-    )) as String?;
+    );
 
     setState(() => loading = false);
 
-    if (result != null) {
+    // If error
+    if (result == null || result.containsKey("error")) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(result), backgroundColor: Colors.red),
+        SnackBar(
+          content: Text(result?["error"] ?? "Login failed"),
+          backgroundColor: Colors.red,
+        ),
       );
       return;
     }
 
-    Navigator.pushReplacement(
-      context,
+    // Navigate instantly
+    Navigator.of(context).pushReplacement(
       MaterialPageRoute(builder: (_) => const RoleBasedHome()),
     );
   }

@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:usersideloanapp/Admin/admin/admin_layout.dart';
 import 'package:usersideloanapp/Admin/ManagerHome.dart';
 import 'package:usersideloanapp/Admin/loan_officer/LoanOfficerLayout.dart';
+import 'package:usersideloanapp/Admin/manager/manager_layout.dart';
 import 'package:usersideloanapp/homepage/Homepage.dart';
 import 'package:usersideloanapp/user/UserDashboard/user_layout.dart';
 
@@ -37,25 +38,34 @@ class RoleBasedHome extends StatelessWidget {
 
         final data = snapshot.data!.data() as Map<String, dynamic>;
 
-        final role = data['role']?.toString().toUpperCase() ?? "APPLICANT";
+        final role = data['role']
+                ?.toString()
+                .toLowerCase()
+                .replaceAll("_", "")
+                .replaceAll(" ", "") ??
+            "applicant";
+
+        print("USER ROLE = $role");
 
         switch (role) {
-          case "ADMIN":
+          case "admin":
             return const AdminLayout(initialRoute: '/admin/dashboard');
-          case "APPLICANT":
+
+          case "applicant":
             return const UserLayout();
 
-          case "MANAGER":
-            return const ManagerHome();
+          case "manager":
+            return const ManagerLayout();
 
-          case "loanOfficer":
+          case "loanofficer":
             return const LoanOfficerLayout(
               initialRoute: "/loan_officer/dashboard",
             );
 
           default:
-            return const HomePage(); // Applicant
+            return const HomePage();
         }
+        ;
       },
     );
   }

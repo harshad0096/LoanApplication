@@ -3,7 +3,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 /// ===================== ENUMS =====================
-enum UserRole { applicant, loanOfficer, creditAnalyst, manager, admin }
+enum UserRole { applicant, loanofficer, creditAnalyst, manager, admin }
 
 enum UserStatus { active, inactive }
 
@@ -35,8 +35,8 @@ String roleLabel(UserRole role) {
   switch (role) {
     case UserRole.applicant:
       return "Applicant";
-    case UserRole.loanOfficer:
-      return "Loan Officer";
+    case UserRole.loanofficer:
+      return "loanofficer";
     case UserRole.creditAnalyst:
       return "Credit Analyst";
     case UserRole.manager:
@@ -53,13 +53,12 @@ UserRole roleFromString(String role) {
   );
 }
 
-String roleToString(UserRole role) => role.name;
-
+String roleToString(UserRole role) => role.name.toLowerCase();
 Color roleColor(UserRole role) {
   switch (role) {
     case UserRole.applicant:
       return Colors.blue.shade100;
-    case UserRole.loanOfficer:
+    case UserRole.loanofficer:
       return Colors.teal.shade100;
     case UserRole.creditAnalyst:
       return Colors.orange.shade100;
@@ -231,18 +230,17 @@ class _UsersRolesPageState extends State<UsersRolesPage> {
                           status: data['status'] == 'inactive'
                               ? UserStatus.inactive
                               : UserStatus.active,
-                          joined:
-                              (data['createdAt'] as Timestamp?)?.toDate() ??
+                          joined: (data['createdAt'] as Timestamp?)?.toDate() ??
                               DateTime.now(),
                           lastLogin:
                               (data['lastLogin'] as Timestamp?)?.toDate() ??
-                              DateTime.now(),
+                                  DateTime.now(),
                         );
                       })
                       .where(
                         (u) => u.email.toLowerCase().contains(
-                          search.toLowerCase(),
-                        ),
+                              search.toLowerCase(),
+                            ),
                       )
                       .toList();
 
