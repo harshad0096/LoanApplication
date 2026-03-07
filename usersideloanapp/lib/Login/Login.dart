@@ -41,7 +41,6 @@ class _LoginPageState extends State<LoginPage> {
 
     setState(() => loading = false);
 
-    // If error
     if (result == null || result.containsKey("error")) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -52,7 +51,13 @@ class _LoginPageState extends State<LoginPage> {
       return;
     }
 
-    // Navigate instantly
+    // ✅ Save session for persistent login
+    await _authService.saveSession({
+      'uid': result['uid'],
+      'role': result['role'],
+      'email': emailController.text.trim(),
+    });
+
     Navigator.of(context).pushReplacement(
       MaterialPageRoute(builder: (_) => const RoleBasedHome()),
     );

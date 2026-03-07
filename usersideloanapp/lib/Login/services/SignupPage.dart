@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:usersideloanapp/Login/OTPVerificationPage.dart';
+import 'package:usersideloanapp/Login/services/OTPService.dart';
 import '../services/auth_service.dart';
 import 'package:usersideloanapp/Appbar/quickloan_appbar.dart';
 
@@ -6,166 +8,238 @@ class SignupPage extends StatefulWidget {
   const SignupPage({super.key});
 
   @override
-  State<SignupPage> createState() => _SignupPageState();
+  State<SignupPage> createState() => _SignupPage();
 }
 
-class _SignupPageState extends State<SignupPage> {
-  final _formKey = GlobalKey<FormState>();
+class _SignupPage extends State<SignupPage> {
+  final AuthService _authService = AuthService();
 
-  // Controllers
-  final nameController = TextEditingController();
-  final emailController = TextEditingController();
-  final phoneController = TextEditingController();
+  final PageController _pageController = PageController();
+
+  int currentStep = 0;
+  bool loading = false;
+  final OTPService _otpService = OTPService();
+
+  String verificationId = "";
+  final otpController = TextEditingController();
+
+  bool otpSent = false;
+  bool otpVerified = false;
+  // STEP 1
+  final firstNameController = TextEditingController();
+  final middleNameController = TextEditingController();
+  final lastNameController = TextEditingController();
   final dobController = TextEditingController();
   final addressController = TextEditingController();
-  final employmentController = TextEditingController();
+
+  // STEP 2
+  final emailController = TextEditingController();
+  final phoneController = TextEditingController();
+
+  // STEP 3
+  String employmentType = "Salaried";
+
+  // STEP 4
   final passwordController = TextEditingController();
   final confirmPasswordController = TextEditingController();
 
-  final AuthService _authService = AuthService();
-
-  bool loading = false;
   bool obscurePassword = true;
   bool obscureConfirmPassword = true;
-  String employmentType = "Salaried";
 
-  @override
-  void dispose() {
-    nameController.dispose();
-    emailController.dispose();
-    phoneController.dispose();
-    dobController.dispose();
-    addressController.dispose();
-    passwordController.dispose();
-    confirmPasswordController.dispose();
-    super.dispose();
+  double get progress => (currentStep + 1) / 5;
+
+  // =========================================================
+  void showError(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: Colors.red,
+      ),
+    );
   }
+  //otp
 
-  // ======================================================
-  // 🚀 SIGNUP FUNCTION
-  // ======================================================
-  Future<void> signUp() async {
-    if (!_formKey.currentState!.validate()) return;
+  // =========================================================
+  bool validateCurrentStep() {
+    switch (currentStep) {
+      // STEP 1
+      case 0:
+        if (firstNameController.text.trim().isEmpty) {
+          showError("First Name required");
+          return false;
+        }
 
-    try {
-      final parts = dobController.text.split("/");
-      final dobDate = DateTime(
-        int.parse(parts[2]),
-        int.parse(parts[1]),
-        int.parse(parts[0]),
-      );
+        if (lastNameController.text.trim().isEmpty) {
+          showError("Last Name required");
+          return false;
+        }
 
-      setState(() => loading = true);
+        if (dobController.text.isEmpty) {
+          showError("Date of Birth required");
+          return false;
+        }
 
-      final result = await _authService.signUp(
-        email: emailController.text.trim(),
-        password: passwordController.text.trim(),
-        name: nameController.text.trim(),
-        phone: phoneController.text.trim(),
-        dob: dobDate,
-        address: addressController.text.trim(),
-        employmentType: employmentType,
-      );
+        final parts = dobController.text.split("/");
 
-      if (!mounted) return;
-      setState(() => loading = false);
+        final dob = DateTime(
+          int.parse(parts[2]),
+          int.parse(parts[1]),
+          int.parse(parts[0]),
+        );
 
-      if (result == null) {
-        await _showVerifyDialog();
-      } else {
-        _showSnack(result);
-      }
-    } catch (e) {
-      setState(() => loading = false);
-      _showSnack("Invalid date of birth.");
+        final age = DateTime.now().year - dob.year;
+
+        if (age < 18) {
+          showError("You must be at least 18 years old");
+          return false;
+        }
+
+        if (addressController.text.trim().isEmpty) {
+          showError("Address required");
+          return false;
+        }
+
+        return true;
+
+      // STEP 2
+      case 1:
+        if (!RegExp(r'\S+@\S+\.\S+').hasMatch(emailController.text)) {
+          showError("Enter valid email");
+          return false;
+        }
+
+        if (!RegExp(r'^[0-9]{10}$').hasMatch(phoneController.text)) {
+          showError("Enter valid 10 digit phone");
+          return false;
+        }
+
+        return true;
+
+      // STEP 3
+      case 2:
+        if (!otpVerified) {
+          showError("Please verify phone number with OTP");
+          return false;
+        }
+
+        return true;
+      case 3:
+        if (employmentType.isEmpty) {
+          showError("Select employment type");
+          return false;
+        }
+
+        return true;
+
+      // STEP 4
+      case 4:
+        if (passwordController.text.length < 8) {
+          showError("Password must be minimum 8 characters");
+          return false;
+        }
+
+        if (passwordController.text != confirmPasswordController.text) {
+          showError("Passwords do not match");
+          return false;
+        }
+
+        return true;
     }
+
+    return false;
   }
 
-  // ======================================================
-  // EMAIL VERIFY DIALOG WITH COUNTDOWN
-  // ======================================================
-  Future<void> _showVerifyDialog() async {
-    int countdown = 30;
-    bool canResend = false;
+//otp functiona
+  Future<void> sendOTP() async {
+    setState(() => loading = true);
 
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (_) {
-        return StatefulBuilder(builder: (context, setStateDialog) {
-          if (countdown > 0) {
-            Future.delayed(const Duration(seconds: 1), () {
-              if (countdown > 0) {
-                setStateDialog(() => countdown--);
-              } else {
-                setStateDialog(() => canResend = true);
-              }
-            });
-          }
+    await _otpService.sendOTP(
+      phone: "+91${phoneController.text}",
+      codeSent: (id) {
+        verificationId = id;
 
-          return AlertDialog(
-            shape:
-                RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-            title: const Text("Verify Your Email"),
-            content: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const Text(
-                  "Verification link sent to your email.\n\n"
-                  "After verifying, click VERIFY.",
-                ),
-                const SizedBox(height: 12),
-                if (!canResend)
-                  Text(
-                    "Resend available in $countdown s",
-                    style: const TextStyle(color: Colors.grey),
-                  ),
-              ],
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(context),
-                child: const Text("Cancel"),
-              ),
-              if (canResend)
-                TextButton(
-                  onPressed: () async {
-                    await _authService.resendVerificationEmail();
-                    setStateDialog(() {
-                      countdown = 30;
-                      canResend = false;
-                    });
-                    _showSnack("Verification email resent");
-                  },
-                  child: const Text("Resend"),
-                ),
-              ElevatedButton(
-                onPressed: () async {
-                  bool verified = await _authService.checkEmailVerified();
-                  if (!mounted) return;
-
-                  if (verified) {
-                    Navigator.pop(context);
-                    Navigator.pushNamedAndRemoveUntil(
-                        context, "/login", (route) => false);
-                  } else {
-                    _showSnack("Email not verified yet");
-                  }
-                },
-                child: const Text("VERIFY"),
-              ),
-            ],
-          );
+        setState(() {
+          otpSent = true;
+          loading = false;
         });
+      },
+      error: (msg) {
+        showError(msg);
+        setState(() => loading = false);
       },
     );
   }
 
-  void _showSnack(String msg) {
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
+  Future<void> verifyOTP() async {
+    if (otpController.text.length != 6) {
+      showError("Enter valid OTP");
+      return;
+    }
+
+    setState(() => loading = true);
+
+    final result = await _otpService.verifyOTP(
+      verificationId: verificationId,
+      otp: otpController.text.trim(),
+    );
+
+    setState(() => loading = false);
+
+    if (result == null) {
+      setState(() {
+        otpVerified = true;
+      });
+
+      ScaffoldMessenger.of(context)
+          .showSnackBar(const SnackBar(content: Text("Phone Verified")));
+    } else {
+      showError(result);
+    }
   }
 
-  // ======================================================
+  // =========================================================
+  Future<void> signUp() async {
+    if (!validateCurrentStep()) return;
+
+    final parts = dobController.text.split("/");
+
+    final dobDate = DateTime(
+      int.parse(parts[2]),
+      int.parse(parts[1]),
+      int.parse(parts[0]),
+    );
+
+    setState(() => loading = true);
+
+    final fullName = [
+      firstNameController.text.trim(),
+      middleNameController.text.trim(),
+      lastNameController.text.trim(),
+    ].where((name) => name.isNotEmpty).join(" ");
+
+    final result = await _authService.signUp(
+      email: emailController.text.trim(),
+      password: passwordController.text.trim(),
+      name: fullName,
+      phone: phoneController.text.trim(),
+      dob: dobDate,
+      address: addressController.text.trim(),
+      employmentType: employmentType,
+    );
+
+    setState(() => loading = false);
+
+    if (result == null) {
+      ScaffoldMessenger.of(context)
+          .showSnackBar(const SnackBar(content: Text("Signup Success")));
+
+      Navigator.pushNamedAndRemoveUntil(context, "/login", (route) => false);
+    } else {
+      showError(result);
+    }
+  }
+
+  // =========================================================
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -174,6 +248,7 @@ class _SignupPageState extends State<SignupPage> {
           isMobile: MediaQuery.of(context).size.width < 900,
         ),
       ),
+      resizeToAvoidBottomInset: true,
       body: LayoutBuilder(
         builder: (context, constraints) {
           return constraints.maxWidth < 900 ? _mobileView() : _webView();
@@ -182,7 +257,7 @@ class _SignupPageState extends State<SignupPage> {
     );
   }
 
-  // ======================================================
+  // =========================================================
   Widget _webView() {
     return Row(
       children: [
@@ -192,7 +267,7 @@ class _SignupPageState extends State<SignupPage> {
           child: Center(
             child: SingleChildScrollView(
               padding: const EdgeInsets.all(24),
-              child: _signupCard(width: 520, isWeb: true),
+              child: _signupCard(width: 520),
             ),
           ),
         ),
@@ -203,16 +278,13 @@ class _SignupPageState extends State<SignupPage> {
   Widget _mobileView() {
     return SafeArea(
       child: SingleChildScrollView(
-        padding: EdgeInsets.only(
-          bottom: MediaQuery.of(context).viewInsets.bottom + 20,
-        ),
         child: Column(
           children: [
             _gradientSection(isMobile: true),
             const SizedBox(height: 20),
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 16),
-              child: _signupCard(width: double.infinity, isWeb: false),
+              child: _signupCard(width: double.infinity),
             ),
           ],
         ),
@@ -220,7 +292,7 @@ class _SignupPageState extends State<SignupPage> {
     );
   }
 
-  // ======================================================
+  // =========================================================
   Widget _gradientSection({bool isMobile = false}) {
     return Container(
       width: double.infinity,
@@ -231,8 +303,6 @@ class _SignupPageState extends State<SignupPage> {
       decoration: const BoxDecoration(
         gradient: LinearGradient(
           colors: [Color(0xff7F00FF), Color(0xffE100FF)],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
         ),
         borderRadius: BorderRadius.only(
           bottomLeft: Radius.circular(30),
@@ -245,206 +315,336 @@ class _SignupPageState extends State<SignupPage> {
           Text(
             "QuickLoan",
             style: TextStyle(
-              color: Colors.white,
-              fontSize: 22,
-              fontWeight: FontWeight.bold,
-            ),
+                color: Colors.white, fontSize: 22, fontWeight: FontWeight.bold),
           ),
           SizedBox(height: 30),
           Text(
             "Create Your\nAccount",
             style: TextStyle(
-              color: Colors.white,
-              fontSize: 34,
-              fontWeight: FontWeight.bold,
-            ),
+                color: Colors.white, fontSize: 34, fontWeight: FontWeight.bold),
           ),
         ],
       ),
     );
   }
 
-  // ======================================================
-  Widget _signupCard({required double width, required bool isWeb}) {
+  // =========================================================
+  Widget _signupCard({required double width}) {
     return Container(
-      constraints: const BoxConstraints(maxWidth: 600),
       width: width,
       padding: const EdgeInsets.all(28),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(20),
         boxShadow: [
-          BoxShadow(
-            color: Colors.grey.shade300,
-            blurRadius: 24,
-            spreadRadius: 6,
-          ),
+          BoxShadow(color: Colors.grey.shade300, blurRadius: 24),
         ],
       ),
-      child: Form(
-        key: _formKey,
-        child: Column(
-          children: [
-            const Text(
-              "Create Account",
-              style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+      child: Column(
+        children: [
+          const Text(
+            "Create Account",
+            style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+          ),
+
+          const SizedBox(height: 20),
+
+          // STEP INDICATOR
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: List.generate(4, (index) {
+              bool active = index <= currentStep;
+
+              return AnimatedContainer(
+                duration: const Duration(milliseconds: 300),
+                height: 34,
+                width: 34,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color:
+                      active ? const Color(0xff7F00FF) : Colors.grey.shade300,
+                ),
+                child: Center(
+                  child: active
+                      ? const Icon(Icons.check, color: Colors.white, size: 18)
+                      : Text("${index + 1}"),
+                ),
+              );
+            }),
+          ),
+
+          const SizedBox(height: 20),
+
+          ClipRRect(
+            borderRadius: BorderRadius.circular(20),
+            child: LinearProgressIndicator(
+              value: progress,
+              minHeight: 8,
+              backgroundColor: Colors.grey.shade300,
+              valueColor: const AlwaysStoppedAnimation(Color(0xff7F00FF)),
             ),
-            const SizedBox(height: 24),
-            isWeb
-                ? Wrap(
-                    spacing: 16,
-                    runSpacing: 16,
-                    children: _formFields(isWeb),
-                  )
-                : Column(children: _formFields(isWeb)),
-            const SizedBox(height: 24),
-            loading
-                ? const CircularProgressIndicator()
-                : SizedBox(
-                    width: double.infinity,
-                    height: 50,
-                    child: ElevatedButton(
-                      onPressed: signUp,
-                      style: ElevatedButton.styleFrom(
-                        shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12)),
-                        backgroundColor: const Color(0xff7F00FF),
-                      ),
-                      child: const Text(
-                        "Sign Up",
-                        style: TextStyle(fontSize: 18),
-                      ),
+          ),
+
+          const SizedBox(height: 20),
+
+          SizedBox(
+            height: 260,
+            child: PageView(
+              controller: _pageController,
+              physics: const NeverScrollableScrollPhysics(),
+              children: [
+                // STEP 1
+                Column(
+                  children: [
+                    Row(
+                      children: [
+                        Expanded(
+                          child: _field(
+                            firstNameController,
+                            "First Name",
+                            Icons.person_outline,
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: _field(
+                            middleNameController,
+                            "Middle Name",
+                            Icons.person_outline,
+                          ),
+                        ),
+                      ],
                     ),
+                    const SizedBox(height: 12),
+                    _field(
+                      lastNameController,
+                      "Last Name",
+                      Icons.person,
+                    ),
+                    const SizedBox(height: 12),
+                    _dobField(),
+                    const SizedBox(height: 12),
+                    _field(
+                      addressController,
+                      "Address",
+                      Icons.home,
+                    ),
+                  ],
+                ),
+
+                // STEP 2
+                Column(
+                  children: [
+                    _field(emailController, "Email", Icons.email),
+                    const SizedBox(height: 12),
+                    _field(phoneController, "Phone", Icons.phone),
+                  ],
+                ),
+
+                // STEP 3
+                Column(
+                  children: [
+                    if (!otpSent)
+                      SizedBox(
+                        width: double.infinity,
+                        child: ElevatedButton(
+                          onPressed: sendOTP,
+                          child: const Text("Send OTP"),
+                        ),
+                      ),
+                    if (otpSent) ...[
+                      TextField(
+                        controller: otpController,
+                        keyboardType: TextInputType.number,
+                        maxLength: 6,
+                        decoration: InputDecoration(
+                          labelText: "Enter OTP",
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 10),
+                      SizedBox(
+                        width: double.infinity,
+                        child: ElevatedButton(
+                          onPressed: verifyOTP,
+                          child: const Text("Verify OTP"),
+                        ),
+                      ),
+                      TextButton(
+                        onPressed: sendOTP,
+                        child: const Text("Resend OTP"),
+                      ),
+                      if (otpVerified)
+                        const Text(
+                          "Phone Verified ✓",
+                          style: TextStyle(color: Colors.green),
+                        ),
+                    ],
+                  ],
+                ),
+                DropdownButtonFormField<String>(
+                  value: employmentType,
+                  decoration: InputDecoration(
+                    labelText: "Employment Type",
+                    border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12)),
                   ),
-          ],
-        ),
+                  items: const [
+                    DropdownMenuItem(
+                        value: "Salaried", child: Text("Salaried")),
+                    DropdownMenuItem(
+                        value: "Self Employed", child: Text("Self Employed")),
+                  ],
+                  onChanged: (v) => setState(() => employmentType = v!),
+                ),
+
+                // STEP 4
+                Column(
+                  children: [
+                    _passwordField(
+                        passwordController, "Password", obscurePassword, () {
+                      setState(() => obscurePassword = !obscurePassword);
+                    }),
+                    const SizedBox(height: 12),
+                    _passwordField(confirmPasswordController,
+                        "Confirm Password", obscureConfirmPassword, () {
+                      setState(() =>
+                          obscureConfirmPassword = !obscureConfirmPassword);
+                    }),
+                  ],
+                ),
+              ],
+            ),
+          ),
+
+          const SizedBox(height: 20),
+
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              if (currentStep > 0)
+                TextButton(
+                  onPressed: () async {
+                    if (!validateCurrentStep()) return;
+
+                    // STEP 2 → PHONE OTP VERIFICATION
+                    if (currentStep == 1) {
+                      final verified = await Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => OTPVerificationPage(
+                            phone: "+91${phoneController.text}",
+                          ),
+                        ),
+                      );
+
+                      // if OTP not verified stop here
+                      if (verified != true) return;
+                    }
+
+                    if (currentStep < 3) {
+                      setState(() => currentStep++);
+
+                      _pageController.nextPage(
+                        duration: const Duration(milliseconds: 400),
+                        curve: Curves.easeInOut,
+                      );
+                    } else {
+                      signUp();
+                    }
+                  },
+                  child: const Text("Back"),
+                ),
+              ElevatedButton(
+                onPressed: () {
+                  if (!validateCurrentStep()) return;
+
+                  if (currentStep < 3) {
+                    setState(() => currentStep++);
+
+                    _pageController.nextPage(
+                      duration: const Duration(milliseconds: 400),
+                      curve: Curves.easeInOut,
+                    );
+                  } else {
+                    signUp();
+                  }
+                },
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xff7F00FF),
+                ),
+                child: Text(currentStep == 3 ? "Sign Up" : "Next"),
+              ),
+            ],
+          ),
+
+          if (loading)
+            const Padding(
+              padding: EdgeInsets.only(top: 20),
+              child: CircularProgressIndicator(),
+            ),
+        ],
       ),
     );
   }
 
-  // ======================================================
-  List<Widget> _formFields(bool isWeb) {
-    double fieldWidth = isWeb ? 260 : double.infinity;
-
-    return [
-      _field(nameController, "Full Name", Icons.person, fieldWidth),
-      _field(emailController, "Email", Icons.email_outlined, fieldWidth,
-          validator: (v) {
-        if (v == null || v.trim().isEmpty) return "Email is required";
-        if (!RegExp(r'^[\w-.]+@([\w-]+\.)+[\w-]{2,4}$').hasMatch(v)) {
-          return "Enter valid email";
-        }
-        return null;
-      }),
-      _field(phoneController, "Phone Number", Icons.phone, fieldWidth,
-          validator: (v) {
-        if (v == null || v.isEmpty) return "Phone Number is required";
-        if (!RegExp(r'^[6-9]\d{9}$').hasMatch(v)) {
-          return "Enter valid 10-digit number";
-        }
-        return null;
-      }),
-      // DOB picker
-      SizedBox(
-        width: fieldWidth,
-        child: TextFormField(
-          controller: dobController,
-          readOnly: true,
-          decoration: InputDecoration(
-            labelText: "Date of Birth",
-            prefixIcon: const Icon(Icons.calendar_today),
-            border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-          ),
-          validator: (v) => v == null || v.isEmpty ? "DOB required" : null,
-          onTap: () async {
-            DateTime? picked = await showDatePicker(
-              context: context,
-              initialDate: DateTime(2000),
-              firstDate: DateTime(1950),
-              lastDate: DateTime.now(),
-            );
-            if (picked != null) {
-              dobController.text =
-                  "${picked.day}/${picked.month}/${picked.year}";
-            }
-          },
-        ),
-      ),
-      _field(addressController, "Address", Icons.home, fieldWidth),
-      SizedBox(
-        width: fieldWidth,
-        child: DropdownButtonFormField<String>(
-          value: employmentType,
-          decoration: InputDecoration(
-            labelText: "Employment Type",
-            border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-          ),
-          items: const [
-            DropdownMenuItem(value: "Salaried", child: Text("Salaried")),
-            DropdownMenuItem(
-                value: "Self Employed", child: Text("Self Employed")),
-          ],
-          onChanged: (v) => setState(() => employmentType = v!),
-        ),
-      ),
-      _passwordField(passwordController, "Password", obscurePassword, () {
-        setState(() => obscurePassword = !obscurePassword);
-      }, fieldWidth),
-      _passwordField(
-          confirmPasswordController,
-          "Confirm Password",
-          obscureConfirmPassword,
-          () {
-            setState(() => obscureConfirmPassword = !obscureConfirmPassword);
-          },
-          fieldWidth,
-          validator: (v) {
-            if (v != passwordController.text) return "Passwords do not match";
-            return null;
-          }),
-    ];
-  }
-
-  // ======================================================
-  Widget _field(TextEditingController controller, String label, IconData icon,
-      double width,
-      {String? Function(String?)? validator}) {
-    return SizedBox(
-      width: width,
-      child: TextFormField(
-        controller: controller,
-        validator: validator ??
-            (v) => v == null || v.trim().isEmpty ? "$label is required" : null,
-        decoration: InputDecoration(
-          labelText: label,
-          prefixIcon: Icon(icon),
-          border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-        ),
+  // =========================================================
+  Widget _field(TextEditingController controller, String label, IconData icon) {
+    return TextFormField(
+      controller: controller,
+      decoration: InputDecoration(
+        labelText: label,
+        prefixIcon: Icon(icon),
+        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
       ),
     );
   }
 
-  Widget _passwordField(TextEditingController controller, String label,
-      bool obscure, VoidCallback toggle, double width,
-      {String? Function(String?)? validator}) {
-    return SizedBox(
-      width: width,
-      child: TextFormField(
-        controller: controller,
-        obscureText: obscure,
-        validator: validator ??
-            (v) => v == null || v.length < 8
-                ? "Minimum 8 characters required"
-                : null,
-        decoration: InputDecoration(
-          labelText: label,
-          prefixIcon: const Icon(Icons.lock_outline),
-          suffixIcon: IconButton(
-            icon: Icon(obscure ? Icons.visibility_off : Icons.visibility),
-            onPressed: toggle,
-          ),
-          border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+  // =========================================================
+  Widget _dobField() {
+    return TextFormField(
+      controller: dobController,
+      readOnly: true,
+      decoration: InputDecoration(
+        labelText: "Date of Birth",
+        prefixIcon: const Icon(Icons.calendar_today),
+        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+      ),
+      onTap: () async {
+        DateTime? picked = await showDatePicker(
+          context: context,
+          initialDate: DateTime(2000),
+          firstDate: DateTime(1950),
+          lastDate: DateTime.now(),
+        );
+
+        if (picked != null) {
+          dobController.text = "${picked.day}/${picked.month}/${picked.year}";
+        }
+      },
+    );
+  }
+
+  // =========================================================
+  Widget _passwordField(
+    TextEditingController controller,
+    String label,
+    bool obscure,
+    VoidCallback toggle,
+  ) {
+    return TextFormField(
+      controller: controller,
+      obscureText: obscure,
+      decoration: InputDecoration(
+        labelText: label,
+        prefixIcon: const Icon(Icons.lock_outline),
+        suffixIcon: IconButton(
+          icon: Icon(obscure ? Icons.visibility_off : Icons.visibility),
+          onPressed: toggle,
         ),
+        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
       ),
     );
   }
