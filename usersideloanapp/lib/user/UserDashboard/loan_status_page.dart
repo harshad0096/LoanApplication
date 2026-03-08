@@ -144,6 +144,19 @@ class _UserLoansPageState extends State<UserLoansPage> {
   // ================= UI =================
   @override
   Widget build(BuildContext context) {
+    final currentUser = FirebaseAuth.instance.currentUser;
+
+    /// USER NOT LOGGED IN
+    if (currentUser == null) {
+      return const Scaffold(
+        body: Center(
+          child: Text("User not logged in"),
+        ),
+      );
+    }
+
+    final String userId = currentUser.uid;
+
     return Scaffold(
       backgroundColor: const Color(0xfff4f6ff),
       appBar: AppBar(
@@ -152,33 +165,56 @@ class _UserLoansPageState extends State<UserLoansPage> {
         backgroundColor: const Color(0xff6366F1),
       ),
       body: StreamBuilder<QuerySnapshot>(
-        stream: _firestore
+        stream: FirebaseFirestore.instance
             .collection('loan_applications')
             .where('userId', isEqualTo: userId)
             .orderBy('createdAt', descending: true)
+            .limit(50)
             .snapshots(),
         builder: (context, snapshot) {
+          /// ================= LOADING =================
           if (snapshot.connectionState == ConnectionState.waiting) {
-            return const Center(child: CircularProgressIndicator());
+            return const Center(
+              child: CircularProgressIndicator(),
+            );
           }
 
-          if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
-            return const Center(child: Text("No loan applications found."));
+          /// ================= ERROR =================
+          if (snapshot.hasError) {
+            return Center(
+              child: Text(
+                "Error loading loans\n${snapshot.error}",
+                textAlign: TextAlign.center,
+                style: const TextStyle(color: Colors.red),
+              ),
+            );
           }
+
+          /// ================= EMPTY =================
+          if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+            return const Center(
+              child: Text(
+                "No loan applications found",
+                style: TextStyle(fontSize: 16),
+              ),
+            );
+          }
+
+          final docs = snapshot.data!.docs;
 
           return ListView.builder(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
-            itemCount: snapshot.data!.docs.length,
+            itemCount: docs.length,
             itemBuilder: (context, index) {
-              final doc = snapshot.data!.docs[index];
+              final doc = docs[index];
               final data = doc.data() as Map<String, dynamic>;
 
               final loanType = data["loanType"] ?? "Loan";
-              final amount = toDouble(data["loanAmount"] ?? 0);
+              final amount = toDouble(data["loanAmount"]);
               final tenure = (data["tenureMonths"] ?? 0).toInt();
               final status = data["status"] ?? "SUBMITTED";
 
-              // Policy snapshot
+              /// POLICY SNAPSHOT
               Map<String, dynamic> policy = {};
               if (data["policySnapshot"] != null) {
                 policy = Map<String, dynamic>.from(data["policySnapshot"]);

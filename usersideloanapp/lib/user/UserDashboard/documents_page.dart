@@ -1,4 +1,10 @@
+import 'dart:typed_data';
+
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:file_picker/file_picker.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:usersideloanapp/user/UserDashboard/UploadLoanDocument/DocumentService.dart';
 
 class DocumentsPage extends StatefulWidget {
   const DocumentsPage({super.key});
@@ -38,7 +44,11 @@ class _DocumentsPageState extends State<DocumentsPage>
   }
 
   void _openUploadDialog() {
-    showDialog(context: context, builder: (context) => const UploadDialog());
+    showDialog(
+        context: context,
+        builder: (context) => const UploadDialog(
+              documentType: '',
+            ));
   }
 
   @override
@@ -160,47 +170,102 @@ class _DocumentsPageState extends State<DocumentsPage>
   // ================= DOCUMENTS =================
 
   Widget _buildDocuments() {
-    return Column(
-      children: [
-        DocumentCard(
-          title: "Aadhaar Card",
-          subtitle: "Front and back of your Aadhaar card",
-          fileName: "aadhaar_front_back.pdf",
-          status: "Verified",
-          statusColor: Colors.green,
-          onUpload: _openUploadDialog,
-        ),
-        const SizedBox(height: 16),
-        DocumentCard(
-          title: "PAN Card",
-          subtitle: "Clear image of your PAN card",
-          fileName: "pan_card.jpg",
-          status: "Under Review",
-          statusColor: Colors.orange,
-          onUpload: _openUploadDialog,
-        ),
-        const SizedBox(height: 16),
-        DocumentCard(
-          title: "Salary Slip / Bank Statement",
-          subtitle: "Last 3 months salary slip or bank statement",
-          fileName: "",
-          status: "Pending",
-          statusColor: Colors.grey,
-          onUpload: _openUploadDialog,
-        ),
-        const SizedBox(height: 16),
-        DocumentCard(
-          title: "Photo & Signature",
-          subtitle: "Passport size photo and signature",
-          fileName: "photo_blurry.jpg",
-          status: "Rejected",
-          statusColor: Colors.red,
-          onUpload: _openUploadDialog,
-        ),
-      ],
+    return StreamBuilder(
+      stream: FirebaseFirestore.instance
+          .collection("users")
+          .doc(FirebaseAuth.instance.currentUser!.uid)
+          .collection("documents")
+          .snapshots(),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Center(
+            child: CircularProgressIndicator(),
+          );
+        }
+
+        if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+          return Column(
+            children: [
+              DocumentCard(
+                title: "Aadhaar Card",
+                subtitle: "Front and back of your Aadhaar card",
+                fileName: "",
+                status: "Pending",
+                statusColor: Colors.grey,
+                onUpload: _openUploadDialog,
+              ),
+              const SizedBox(height: 16),
+              DocumentCard(
+                title: "PAN Card",
+                subtitle: "Clear image of your PAN card",
+                fileName: "",
+                status: "Pending",
+                statusColor: Colors.grey,
+                onUpload: _openUploadDialog,
+              ),
+              const SizedBox(height: 16),
+              DocumentCard(
+                title: "Salary Slip / Bank Statement",
+                subtitle: "Last 3 months salary slip or bank statement",
+                fileName: "",
+                status: "Pending",
+                statusColor: Colors.grey,
+                onUpload: _openUploadDialog,
+              ),
+              const SizedBox(height: 16),
+              DocumentCard(
+                title: "Photo & Signature",
+                subtitle: "Passport size photo and signature",
+                fileName: "",
+                status: "Pending",
+                statusColor: Colors.grey,
+                onUpload: _openUploadDialog,
+              ),
+            ],
+          );
+        }
+
+        var docs = snapshot.data!.docs;
+
+        return Column(
+          children: docs.map((doc) {
+            var data = doc.data();
+
+            Color statusColor = Colors.grey;
+
+            if (data['status'] == "verified") {
+              statusColor = Colors.green;
+            } else if (data['status'] == "pending") {
+              statusColor = Colors.orange;
+            } else if (data['status'] == "rejected") {
+              statusColor = Colors.red;
+            } else if (data['status'] == "hold") {
+              statusColor = Colors.blue;
+            }
+
+            return Padding(
+              padding: const EdgeInsets.only(bottom: 16),
+              child: DocumentCard(
+                title: data['type'] ?? "",
+                subtitle: "Uploaded Document",
+                fileName: data['fileName'] ?? "",
+                status: data['status'] ?? "pending",
+                statusColor: statusColor,
+                onUpload: () {
+                  showDialog(
+                    context: context,
+                    builder: (_) => UploadDialog(
+                      documentType: data['type'] ?? "",
+                    ),
+                  );
+                },
+              ),
+            );
+          }).toList(),
+        );
+      },
     );
   }
-
   // ================= RIGHT PANEL =================
 
   Widget _buildRightPanel() {
@@ -374,9 +439,16 @@ class DocumentCard extends StatelessWidget {
             ),
           ),
           IconButton(
-            onPressed: onUpload,
+            onPressed: () {
+              showDialog(
+                context: context,
+                builder: (_) => UploadDialog(
+                  documentType: title,
+                ),
+              );
+            },
             icon: const Icon(Icons.upload_rounded),
-          ),
+          )
         ],
       ),
     );
@@ -410,47 +482,111 @@ class TipItem extends StatelessWidget {
 /// UPLOAD DIALOG (MOBILE FIXED ✅)
 //////////////////////////////////////////////////////////////
 
-class UploadDialog extends StatelessWidget {
-  const UploadDialog({super.key});
+class UploadDialog extends StatefulWidget {
+  final String documentType;
+
+  const UploadDialog({super.key, required this.documentType});
+
+  @override
+  State<UploadDialog> createState() => _UploadDialogState();
+}
+
+class _UploadDialogState extends State<UploadDialog> {
+  bool uploading = false;
+
+  Future pickFile() async {
+    try {
+      FilePickerResult? result = await FilePicker.platform.pickFiles(
+        type: FileType.custom,
+        allowedExtensions: ['jpg', 'png', 'pdf'],
+        withData: true,
+      );
+
+      if (result == null) return;
+
+      PlatformFile file = result.files.first;
+
+      if (file.bytes == null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text("File data not found")),
+        );
+        return;
+      }
+
+      Uint8List bytes = file.bytes!;
+
+      setState(() {
+        uploading = true;
+      });
+
+      await DocumentService().uploadDocument(
+        documentType: widget.documentType,
+        fileName: file.name,
+        fileBytes: bytes,
+      );
+
+      setState(() {
+        uploading = false;
+      });
+
+      Navigator.pop(context);
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Document uploaded successfully")),
+      );
+    } catch (e) {
+      setState(() {
+        uploading = false;
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text("Upload failed: $e")),
+      );
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
     return Dialog(
-      insetPadding: const EdgeInsets.all(20),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-      child: Container(
-        width: 420,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Padding(
         padding: const EdgeInsets.all(24),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Row(
-              children: [
-                const Text(
-                  "Upload Document",
-                  style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-                ),
-                const Spacer(),
-                IconButton(
-                  onPressed: () => Navigator.pop(context),
-                  icon: const Icon(Icons.close),
-                ),
-              ],
+            Text(
+              "Upload ${widget.documentType}",
+              style: const TextStyle(
+                fontSize: 20,
+                fontWeight: FontWeight.bold,
+              ),
             ),
             const SizedBox(height: 20),
-            Container(
-              height: 180,
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: Colors.grey.shade300),
-              ),
-              child: const Center(
-                child: Text(
-                  "Click to upload or drag & drop\nJPG, PNG or PDF up to 5MB",
-                  textAlign: TextAlign.center,
+            InkWell(
+              onTap: pickFile,
+              child: Container(
+                height: 160,
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: Colors.grey),
+                ),
+                child: Center(
+                  child: uploading
+                      ? const CircularProgressIndicator()
+                      : const Text(
+                          "Click to Upload\nJPG, PNG, PDF",
+                          textAlign: TextAlign.center,
+                        ),
                 ),
               ),
             ),
+            const SizedBox(height: 16),
+            ElevatedButton(
+              onPressed: pickFile,
+              child: const Text("Select File"),
+            )
           ],
         ),
       ),

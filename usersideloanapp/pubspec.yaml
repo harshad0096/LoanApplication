@@ -17,7 +17,7 @@ dependencies:
   firebase_messaging: ^16.1.1
   firebase_storage: ^13.1.0
   image_picker: ^1.2.1
-  file_picker: ^6.1.1
+  file_picker: ^8.0.0
   universal_html: ^2.2.4
 
 
@@ -30,6 +30,9 @@ dependencies:
   google_fonts: ^6.1.0
   flutter_animate: ^4.5.0
   fl_chart: ^0.68.0
+  scrollable_positioned_list: ^0.3.8
+  syncfusion_flutter_gauges: ^25.1.35
+  
 
   # ⭐ Recommended for production fintech apps
   intl: ^0.19.0

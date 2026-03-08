@@ -4,8 +4,8 @@ import 'package:usersideloanapp/user/UserDashboard/UserProfilePage.dart';
 import 'package:usersideloanapp/user/UserDashboard/documents_page.dart';
 import 'package:usersideloanapp/user/UserDashboard/loan_status_page.dart';
 import 'package:usersideloanapp/user/UserDashboard/loans_page.dart';
+import 'package:usersideloanapp/user/UserDashboard/user_dashboard.dart';
 import 'user_sidebar.dart';
-import 'user_dashboard.dart';
 import '../../Appbar/quickloan_appbar.dart';
 
 class UserLayout extends StatefulWidget {
@@ -15,13 +15,9 @@ class UserLayout extends StatefulWidget {
   State<UserLayout> createState() => _UserLayoutState();
 }
 
-class _UserLayoutState extends State<UserLayout>
-    with SingleTickerProviderStateMixin {
+class _UserLayoutState extends State<UserLayout> {
   int selectedIndex = 0;
   bool isSidebarCollapsed = false;
-
-  /// ✅ FIX: Scaffold key for mobile drawer
-  final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
 
   final List<Widget> pages = [
     const UserDashboard(),
@@ -42,34 +38,17 @@ class _UserLayoutState extends State<UserLayout>
         final isTablet = width >= 700 && width < 1100;
 
         return Scaffold(
-          key: _scaffoldKey,
           backgroundColor: const Color(0xffF5F7FB),
 
-          /// ✅ APP BAR (FIXED)
+          /// APP BAR
           appBar: QuickLoanAppBar(
             isMobile: isMobile,
-            onMenuTap: () => _scaffoldKey.currentState?.openDrawer(),
           ),
 
-          /// ✅ MOBILE DRAWER
-          drawer: isMobile
-              ? UserSidebar(
-                  selectedIndex: selectedIndex,
-                  onItemSelected: (index) {
-                    setState(() => selectedIndex = index);
-                    Navigator.pop(context);
-                  },
-                  isCollapsed: false,
-                  onToggle: () {},
-                )
-              : null,
-
-          /// optional: better swipe experience
-          drawerEdgeDragWidth: isMobile ? 80 : 0,
-
+          /// BODY
           body: Row(
             children: [
-              /// 💻 Sidebar for tablet + desktop
+              /// 💻 SIDEBAR (Tablet + Desktop)
               if (!isMobile)
                 AnimatedContainer(
                   duration: const Duration(milliseconds: 300),
@@ -90,7 +69,7 @@ class _UserLayoutState extends State<UserLayout>
                   ),
                 ),
 
-              /// 📄 PAGE CONTENT (animated)
+              /// PAGE CONTENT
               Expanded(
                 child: AnimatedSwitcher(
                   duration: const Duration(milliseconds: 300),
@@ -99,6 +78,43 @@ class _UserLayoutState extends State<UserLayout>
               ),
             ],
           ),
+
+          /// 📱 MOBILE BOTTOM NAVIGATION
+          bottomNavigationBar: isMobile
+              ? BottomNavigationBar(
+                  currentIndex: selectedIndex,
+                  type: BottomNavigationBarType.fixed,
+                  onTap: (index) {
+                    setState(() => selectedIndex = index);
+                  },
+                  items: const [
+                    BottomNavigationBarItem(
+                      icon: Icon(Icons.dashboard),
+                      label: "Dashboard",
+                    ),
+                    BottomNavigationBarItem(
+                      icon: Icon(Icons.account_balance),
+                      label: "Loans",
+                    ),
+                    BottomNavigationBarItem(
+                      icon: Icon(Icons.check_circle),
+                      label: "Status",
+                    ),
+                    BottomNavigationBarItem(
+                      icon: Icon(Icons.description),
+                      label: "Docs",
+                    ),
+                    BottomNavigationBarItem(
+                      icon: Icon(Icons.notifications),
+                      label: "Alerts",
+                    ),
+                    BottomNavigationBarItem(
+                      icon: Icon(Icons.person),
+                      label: "Profile",
+                    ),
+                  ],
+                )
+              : null,
         );
       },
     );

@@ -5,7 +5,6 @@ import 'package:flutter/material.dart';
 import 'package:usersideloanapp/Admin/admin/admin_layout.dart';
 import 'package:usersideloanapp/Admin/ManagerHome.dart';
 import 'package:usersideloanapp/Admin/loan_officer/LoanOfficerLayout.dart';
-import 'package:usersideloanapp/Admin/manager/manager_layout.dart';
 import 'package:usersideloanapp/homepage/Homepage.dart';
 import 'package:usersideloanapp/user/UserDashboard/user_layout.dart';
 
@@ -14,59 +13,100 @@ class RoleBasedHome extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final user = FirebaseAuth.instance.currentUser;
-
-    if (user == null) {
-      return const Scaffold(body: Center(child: Text("User not logged in")));
-    }
-
-    return FutureBuilder<DocumentSnapshot>(
-      future:
-          FirebaseFirestore.instance.collection('users').doc(user.uid).get(),
-      builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting) {
+    return StreamBuilder<User?>(
+      stream: FirebaseAuth.instance.authStateChanges(),
+      builder: (context, authSnapshot) {
+        /// ⏳ Loading while firebase restores session
+        if (authSnapshot.connectionState == ConnectionState.waiting) {
           return const Scaffold(
             body: Center(child: CircularProgressIndicator()),
           );
         }
 
-        if (!snapshot.hasData || !snapshot.data!.exists) {
-          return const Scaffold(
-            body: Center(child: Text("User data not found")),
-          );
+        /// ❌ NOT LOGGED IN
+        if (!authSnapshot.hasData) {
+          return const HomePage();
         }
 
-        final data = snapshot.data!.data() as Map<String, dynamic>;
+        final user = authSnapshot.data!;
 
-        final role = data['role']
-                ?.toString()
-                .toLowerCase()
-                .replaceAll("_", "")
-                .replaceAll(" ", "") ??
-            "applicant";
+        /// ✅ FETCH ROLE
+        return FutureBuilder<DocumentSnapshot>(
+          future: FirebaseFirestore.instance
+              .collection('users')
+              .doc(user.uid)
+              .get(),
+          builder: (context, roleSnapshot) {
+            /// ⏳ Loading role
+            if (roleSnapshot.connectionState == ConnectionState.waiting) {
+              return const Scaffold(
+                body: Center(child: CircularProgressIndicator()),
+              );
+            }
 
-        print("USER ROLE = $role");
+            /// ❌ Error loading user doc
+            if (roleSnapshot.hasError) {
+              return _errorScreen();
+            }
 
-        switch (role) {
-          case "admin":
-            return const AdminLayout(initialRoute: '/admin/dashboard');
+            /// ❌ If user doc missing
+            if (!roleSnapshot.hasData || !roleSnapshot.data!.exists) {
+              return const UserLayout();
+            }
 
-          case "applicant":
-            return const UserLayout();
+            final data = roleSnapshot.data!.data() as Map<String, dynamic>;
 
-          case "manager":
-            return const ManagerLayout();
+            final role = data['role']?.toString().toLowerCase() ?? "applicant";
 
-          case "loanofficer":
-            return const LoanOfficerLayout(
-              initialRoute: "/loan_officer/dashboard",
-            );
+            debugPrint("🔥 USER ROLE = $role");
 
-          default:
-            return const HomePage();
-        }
-        ;
+            switch (role) {
+              case "admin":
+                return const AdminLayout(
+                  initialRoute: '/admin/dashboard',
+                );
+
+              case "manager":
+                return const ManagerHome();
+
+              case "loanofficer":
+                return const LoanOfficerLayout(
+                  initialRoute: "/loan_officer/dashboard",
+                );
+
+              case "applicant":
+                return const UserLayout();
+
+              default:
+                return const HomePage();
+            }
+          },
+        );
       },
+    );
+  }
+
+  /// 🔴 ERROR SCREEN WITH REFRESH BUTTON
+  Widget _errorScreen() {
+    return Scaffold(
+      body: Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const Text(
+              "Something went wrong",
+              style: TextStyle(fontSize: 18),
+            ),
+            const SizedBox(height: 20),
+            ElevatedButton(
+              onPressed: () {
+                FirebaseAuth.instance.signOut();
+              },
+              child: const Text("Refresh Page"),
+            )
+          ],
+        ),
+      ),
     );
   }
 }

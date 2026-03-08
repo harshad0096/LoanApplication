@@ -41,7 +41,6 @@ class _LoginPageState extends State<LoginPage> {
 
     setState(() => loading = false);
 
-    // If error
     if (result == null || result.containsKey("error")) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -52,7 +51,13 @@ class _LoginPageState extends State<LoginPage> {
       return;
     }
 
-    // Navigate instantly
+    // ✅ Save session for persistent login
+    await _authService.saveSession({
+      'uid': result['uid'],
+      'role': result['role'],
+      'email': emailController.text.trim(),
+    });
+
     Navigator.of(context).pushReplacement(
       MaterialPageRoute(builder: (_) => const RoleBasedHome()),
     );
@@ -144,6 +149,7 @@ class _LoginPageState extends State<LoginPage> {
   // ================= GRADIENT SECTION =================
   Widget gradientSection() {
     return Container(
+      clipBehavior: Clip.hardEdge,
       padding: const EdgeInsets.all(60),
       decoration: const BoxDecoration(
         gradient: LinearGradient(
@@ -151,49 +157,98 @@ class _LoginPageState extends State<LoginPage> {
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),
+        borderRadius: BorderRadius.only(
+          bottomLeft: Radius.circular(60),
+          bottomRight: Radius.circular(60),
+        ),
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisAlignment: MainAxisAlignment.center,
+      child: Row(
         children: [
-          AnimatedContainer(
-            duration: const Duration(milliseconds: 250),
-            height: 40,
-            width: 40,
-            decoration: BoxDecoration(
-              gradient: const LinearGradient(
-                colors: [Color(0xff7B61FF), Color(0xffA855F7)],
+          /// LEFT TEXT SECTION WITH SLIDE ANIMATION
+          Expanded(
+            flex: 5,
+            child: TweenAnimationBuilder(
+              duration: const Duration(milliseconds: 900),
+              tween: Tween<double>(begin: 60, end: 0),
+              curve: Curves.easeOut,
+              builder: (context, double value, child) {
+                return Transform.translate(
+                  offset: Offset(0, value),
+                  child: Opacity(
+                    opacity: value == 0 ? 1 : 0.9,
+                    child: child,
+                  ),
+                );
+              },
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Container(
+                    height: 40,
+                    width: 40,
+                    decoration: BoxDecoration(
+                      gradient: const LinearGradient(
+                        colors: [Color(0xff7B61FF), Color(0xffA855F7)],
+                      ),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: const Icon(
+                      Icons.currency_rupee,
+                      color: Colors.white,
+                      size: 20,
+                    ),
+                  ),
+                  const SizedBox(height: 30),
+                  const Text(
+                    "QuickLoan",
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 22,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  const SizedBox(height: 40),
+                  const Text(
+                    "Smart Loans\nfor Smart People",
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 42,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  const SizedBox(height: 20),
+                  const Text(
+                    "Get instant personal, home, car and business loans with minimal documentation.",
+                    style: TextStyle(
+                      color: Colors.white70,
+                      fontSize: 16,
+                    ),
+                  ),
+                ],
               ),
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: const Icon(
-              Icons.currency_rupee,
-              color: Colors.white,
-              size: 20,
             ),
           ),
-          const SizedBox(height: 30),
-          const Text(
-            "QuickLoan",
-            style: TextStyle(
-              color: Colors.white,
-              fontSize: 22,
-              fontWeight: FontWeight.bold,
+
+          /// RIGHT IMAGE WITH FLOATING ANIMATION
+          Expanded(
+            flex: 5,
+            child: TweenAnimationBuilder(
+              tween: Tween<double>(begin: -12, end: 12),
+              duration: const Duration(seconds: 3),
+              curve: Curves.easeInOut,
+              builder: (context, double value, child) {
+                return Transform.translate(
+                  offset: Offset(0, value),
+                  child: child,
+                );
+              },
+              child: Image.asset(
+                "assets/images/loan_signup.png",
+                height: 320,
+                fit: BoxFit.contain,
+              ),
             ),
-          ),
-          const SizedBox(height: 40),
-          const Text(
-            "Smart Loans\nfor Smart People",
-            style: TextStyle(
-              color: Colors.white,
-              fontSize: 42,
-              fontWeight: FontWeight.bold,
-            ),
-          ),
-          const SizedBox(height: 20),
-          const Text(
-            "Get instant personal, home, car and business loans with minimal documentation.",
-            style: TextStyle(color: Colors.white70, fontSize: 16),
           ),
         ],
       ),

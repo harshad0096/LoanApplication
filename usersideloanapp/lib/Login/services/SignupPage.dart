@@ -6,166 +6,207 @@ class SignupPage extends StatefulWidget {
   const SignupPage({super.key});
 
   @override
-  State<SignupPage> createState() => _SignupPageState();
+  State<SignupPage> createState() => _SignupPage();
 }
 
-class _SignupPageState extends State<SignupPage> {
-  final _formKey = GlobalKey<FormState>();
+class _SignupPage extends State<SignupPage> {
+  final AuthService _authService = AuthService();
+  final PageController _pageController = PageController();
 
-  // Controllers
-  final nameController = TextEditingController();
-  final emailController = TextEditingController();
-  final phoneController = TextEditingController();
+  String? selectedGender;
+  int currentStep = 0;
+  bool loading = false;
+
+  // STEP 1
+  final firstNameController = TextEditingController();
+  final middleNameController = TextEditingController();
+  final lastNameController = TextEditingController();
   final dobController = TextEditingController();
   final addressController = TextEditingController();
-  final employmentController = TextEditingController();
+
+  // STEP 2
+  final emailController = TextEditingController();
+  final phoneController = TextEditingController();
+
+  // STEP 3
+  String employmentType = "Salaried";
+  final incomeController = TextEditingController();
+
+  // STEP 4
   final passwordController = TextEditingController();
   final confirmPasswordController = TextEditingController();
 
-  final AuthService _authService = AuthService();
-
-  bool loading = false;
   bool obscurePassword = true;
   bool obscureConfirmPassword = true;
-  String employmentType = "Salaried";
 
-  @override
-  void dispose() {
-    nameController.dispose();
-    emailController.dispose();
-    phoneController.dispose();
-    dobController.dispose();
-    addressController.dispose();
-    passwordController.dispose();
-    confirmPasswordController.dispose();
-    super.dispose();
-  }
+  double get progress => (currentStep + 1) / 4;
 
-  // ======================================================
-  // 🚀 SIGNUP FUNCTION
-  // ======================================================
-  Future<void> signUp() async {
-    if (!_formKey.currentState!.validate()) return;
-
-    try {
-      final parts = dobController.text.split("/");
-      final dobDate = DateTime(
-        int.parse(parts[2]),
-        int.parse(parts[1]),
-        int.parse(parts[0]),
-      );
-
-      setState(() => loading = true);
-
-      final result = await _authService.signUp(
-        email: emailController.text.trim(),
-        password: passwordController.text.trim(),
-        name: nameController.text.trim(),
-        phone: phoneController.text.trim(),
-        dob: dobDate,
-        address: addressController.text.trim(),
-        employmentType: employmentType,
-      );
-
-      if (!mounted) return;
-      setState(() => loading = false);
-
-      if (result == null) {
-        await _showVerifyDialog();
-      } else {
-        _showSnack(result);
-      }
-    } catch (e) {
-      setState(() => loading = false);
-      _showSnack("Invalid date of birth.");
-    }
-  }
-
-  // ======================================================
-  // EMAIL VERIFY DIALOG WITH COUNTDOWN
-  // ======================================================
-  Future<void> _showVerifyDialog() async {
-    int countdown = 30;
-    bool canResend = false;
-
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (_) {
-        return StatefulBuilder(builder: (context, setStateDialog) {
-          if (countdown > 0) {
-            Future.delayed(const Duration(seconds: 1), () {
-              if (countdown > 0) {
-                setStateDialog(() => countdown--);
-              } else {
-                setStateDialog(() => canResend = true);
-              }
-            });
-          }
-
-          return AlertDialog(
-            shape:
-                RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-            title: const Text("Verify Your Email"),
-            content: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const Text(
-                  "Verification link sent to your email.\n\n"
-                  "After verifying, click VERIFY.",
-                ),
-                const SizedBox(height: 12),
-                if (!canResend)
-                  Text(
-                    "Resend available in $countdown s",
-                    style: const TextStyle(color: Colors.grey),
-                  ),
-              ],
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(context),
-                child: const Text("Cancel"),
-              ),
-              if (canResend)
-                TextButton(
-                  onPressed: () async {
-                    await _authService.resendVerificationEmail();
-                    setStateDialog(() {
-                      countdown = 30;
-                      canResend = false;
-                    });
-                    _showSnack("Verification email resent");
-                  },
-                  child: const Text("Resend"),
-                ),
-              ElevatedButton(
-                onPressed: () async {
-                  bool verified = await _authService.checkEmailVerified();
-                  if (!mounted) return;
-
-                  if (verified) {
-                    Navigator.pop(context);
-                    Navigator.pushNamedAndRemoveUntil(
-                        context, "/login", (route) => false);
-                  } else {
-                    _showSnack("Email not verified yet");
-                  }
-                },
-                child: const Text("VERIFY"),
-              ),
-            ],
-          );
-        });
-      },
+  // =========================================================
+  void showError(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(message), backgroundColor: Colors.red),
     );
   }
 
-  void _showSnack(String msg) {
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
+  // =========================================================
+  bool validateCurrentStep() {
+    switch (currentStep) {
+      case 0:
+        if (firstNameController.text.trim().isEmpty) {
+          showError("First Name required");
+          return false;
+        }
+
+        if (lastNameController.text.trim().isEmpty) {
+          showError("Last Name required");
+          return false;
+        }
+
+        if (dobController.text.isEmpty) {
+          showError("Date of Birth required");
+          return false;
+        }
+
+        if (addressController.text.trim().isEmpty) {
+          showError("Address required");
+          return false;
+        }
+
+        return true;
+
+      case 1:
+        if (!RegExp(r'^[^@]+@[^@]+\.[^@]+')
+            .hasMatch(emailController.text.trim())) {
+          showError("Enter valid email");
+          return false;
+        }
+
+        if (!RegExp(r'^[0-9]{10}$').hasMatch(phoneController.text.trim())) {
+          showError("Enter valid 10 digit phone number");
+          return false;
+        }
+
+        return true;
+
+      case 2:
+        if (employmentType.isEmpty) {
+          showError("Select employment type");
+          return false;
+        }
+
+        if (incomeController.text.isEmpty) {
+          showError("Enter yearly income");
+          return false;
+        }
+
+        return true;
+
+      case 3:
+        if (passwordController.text.length < 8) {
+          showError("Password must be minimum 8 characters");
+          return false;
+        }
+
+        if (passwordController.text != confirmPasswordController.text) {
+          showError("Passwords do not match");
+          return false;
+        }
+
+        return true;
+    }
+
+    return false;
   }
 
-  // ======================================================
+  // =========================================================
+  Future<void> signUp() async {
+    if (loading) return;
+
+    if (!validateCurrentStep()) return;
+
+    final parts = dobController.text.split("/");
+
+    final dobDate = DateTime(
+      int.parse(parts[2]),
+      int.parse(parts[1]),
+      int.parse(parts[0]),
+    );
+
+    setState(() => loading = true);
+
+    final fullName = [
+      firstNameController.text.trim(),
+      middleNameController.text.trim(),
+      lastNameController.text.trim(),
+    ].where((name) => name.isNotEmpty).join(" ");
+
+    final result = await _authService.signUp(
+      email: emailController.text.trim(),
+      password: passwordController.text.trim(),
+      name: fullName,
+      phone: phoneController.text.trim(),
+      dob: dobDate,
+      address: addressController.text.trim(),
+      employmentType: employmentType,
+    );
+
+    setState(() => loading = false);
+
+    if (result == null) {
+      ScaffoldMessenger.of(context)
+          .showSnackBar(const SnackBar(content: Text("Signup Success")));
+
+      Navigator.pushNamedAndRemoveUntil(context, "/login", (route) => false);
+    } else {
+      showError(result);
+    }
+  }
+
+  // =========================================================
+  void nextStep() {
+    if (!validateCurrentStep()) return;
+
+    if (currentStep < 3) {
+      setState(() => currentStep++);
+
+      _pageController.nextPage(
+        duration: const Duration(milliseconds: 400),
+        curve: Curves.easeInOut,
+      );
+    } else {
+      signUp();
+    }
+  }
+
+  void previousStep() {
+    if (currentStep == 0) return;
+
+    setState(() => currentStep--);
+
+    _pageController.previousPage(
+      duration: const Duration(milliseconds: 400),
+      curve: Curves.easeInOut,
+    );
+  }
+
+  // =========================================================
+  @override
+  void dispose() {
+    firstNameController.dispose();
+    middleNameController.dispose();
+    lastNameController.dispose();
+    dobController.dispose();
+    addressController.dispose();
+    emailController.dispose();
+    phoneController.dispose();
+    incomeController.dispose();
+    passwordController.dispose();
+    confirmPasswordController.dispose();
+    _pageController.dispose();
+    super.dispose();
+  }
+
+  // =========================================================
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -174,6 +215,7 @@ class _SignupPageState extends State<SignupPage> {
           isMobile: MediaQuery.of(context).size.width < 900,
         ),
       ),
+      resizeToAvoidBottomInset: true,
       body: LayoutBuilder(
         builder: (context, constraints) {
           return constraints.maxWidth < 900 ? _mobileView() : _webView();
@@ -182,7 +224,7 @@ class _SignupPageState extends State<SignupPage> {
     );
   }
 
-  // ======================================================
+  // =========================================================
   Widget _webView() {
     return Row(
       children: [
@@ -192,7 +234,7 @@ class _SignupPageState extends State<SignupPage> {
           child: Center(
             child: SingleChildScrollView(
               padding: const EdgeInsets.all(24),
-              child: _signupCard(width: 520, isWeb: true),
+              child: _signupCard(width: 520),
             ),
           ),
         ),
@@ -203,16 +245,13 @@ class _SignupPageState extends State<SignupPage> {
   Widget _mobileView() {
     return SafeArea(
       child: SingleChildScrollView(
-        padding: EdgeInsets.only(
-          bottom: MediaQuery.of(context).viewInsets.bottom + 20,
-        ),
         child: Column(
           children: [
             _gradientSection(isMobile: true),
             const SizedBox(height: 20),
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 16),
-              child: _signupCard(width: double.infinity, isWeb: false),
+              child: _signupCard(width: double.infinity),
             ),
           ],
         ),
@@ -220,14 +259,11 @@ class _SignupPageState extends State<SignupPage> {
     );
   }
 
-  // ======================================================
+  // =========================================================
   Widget _gradientSection({bool isMobile = false}) {
     return Container(
-      width: double.infinity,
-      padding: EdgeInsets.symmetric(
-        vertical: isMobile ? 60 : 80,
-        horizontal: isMobile ? 20 : 60,
-      ),
+      clipBehavior: Clip.hardEdge,
+      padding: const EdgeInsets.all(60),
       decoration: const BoxDecoration(
         gradient: LinearGradient(
           colors: [Color(0xff7F00FF), Color(0xffE100FF)],
@@ -235,28 +271,96 @@ class _SignupPageState extends State<SignupPage> {
           end: Alignment.bottomRight,
         ),
         borderRadius: BorderRadius.only(
-          bottomLeft: Radius.circular(30),
-          bottomRight: Radius.circular(30),
+          bottomLeft: Radius.circular(60),
+          bottomRight: Radius.circular(60),
         ),
       ),
-      child: const Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+      child: Row(
         children: [
-          Text(
-            "QuickLoan",
-            style: TextStyle(
-              color: Colors.white,
-              fontSize: 22,
-              fontWeight: FontWeight.bold,
+          /// LEFT TEXT SECTION WITH SLIDE ANIMATION
+          Expanded(
+            flex: 5,
+            child: TweenAnimationBuilder(
+              duration: const Duration(milliseconds: 900),
+              tween: Tween<double>(begin: 60, end: 0),
+              curve: Curves.easeOut,
+              builder: (context, double value, child) {
+                return Transform.translate(
+                  offset: Offset(0, value),
+                  child: Opacity(
+                    opacity: value == 0 ? 1 : 0.9,
+                    child: child,
+                  ),
+                );
+              },
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Container(
+                    height: 40,
+                    width: 40,
+                    decoration: BoxDecoration(
+                      gradient: const LinearGradient(
+                        colors: [Color(0xff7B61FF), Color(0xffA855F7)],
+                      ),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: const Icon(
+                      Icons.currency_rupee,
+                      color: Colors.white,
+                      size: 20,
+                    ),
+                  ),
+                  const SizedBox(height: 30),
+                  const Text(
+                    "QuickLoan",
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 22,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  const SizedBox(height: 40),
+                  const Text(
+                    "Smart Loans\nfor Smart People",
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 42,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  const SizedBox(height: 20),
+                  const Text(
+                    "Get instant personal, home, car and business loans with minimal documentation.",
+                    style: TextStyle(
+                      color: Colors.white70,
+                      fontSize: 16,
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
-          SizedBox(height: 30),
-          Text(
-            "Create Your\nAccount",
-            style: TextStyle(
-              color: Colors.white,
-              fontSize: 34,
-              fontWeight: FontWeight.bold,
+
+          /// RIGHT IMAGE WITH FLOATING ANIMATION
+          Expanded(
+            flex: 5,
+            child: TweenAnimationBuilder(
+              tween: Tween<double>(begin: -12, end: 12),
+              duration: const Duration(seconds: 3),
+              curve: Curves.easeInOut,
+              builder: (context, double value, child) {
+                return Transform.translate(
+                  offset: Offset(0, value),
+                  child: child,
+                );
+              },
+              child: Image.asset(
+                "assets/images/loan_signup.png",
+                height: 320,
+                fit: BoxFit.contain,
+              ),
             ),
           ),
         ],
@@ -264,120 +368,136 @@ class _SignupPageState extends State<SignupPage> {
     );
   }
 
-  // ======================================================
-  Widget _signupCard({required double width, required bool isWeb}) {
+  // =========================================================
+  Widget _signupCard({required double width}) {
     return Container(
-      constraints: const BoxConstraints(maxWidth: 600),
       width: width,
       padding: const EdgeInsets.all(28),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(20),
         boxShadow: [
-          BoxShadow(
-            color: Colors.grey.shade300,
-            blurRadius: 24,
-            spreadRadius: 6,
-          ),
+          BoxShadow(color: Colors.grey.shade300, blurRadius: 24),
         ],
       ),
-      child: Form(
-        key: _formKey,
-        child: Column(
-          children: [
-            const Text(
-              "Create Account",
-              style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+      child: Column(
+        children: [
+          const Text(
+            "Create Account",
+            style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+          ),
+          const SizedBox(height: 20),
+          LinearProgressIndicator(
+            value: progress,
+            minHeight: 8,
+            backgroundColor: Colors.grey.shade300,
+            valueColor: const AlwaysStoppedAnimation(Color(0xff7F00FF)),
+          ),
+          const SizedBox(height: 20),
+          SizedBox(
+            height: 260,
+            child: PageView(
+              controller: _pageController,
+              physics: const NeverScrollableScrollPhysics(),
+              children: [
+                step1(),
+                step2(),
+                step3(),
+                step4(),
+              ],
             ),
-            const SizedBox(height: 24),
-            isWeb
-                ? Wrap(
-                    spacing: 16,
-                    runSpacing: 16,
-                    children: _formFields(isWeb),
-                  )
-                : Column(children: _formFields(isWeb)),
-            const SizedBox(height: 24),
-            loading
-                ? const CircularProgressIndicator()
-                : SizedBox(
-                    width: double.infinity,
-                    height: 50,
-                    child: ElevatedButton(
-                      onPressed: signUp,
-                      style: ElevatedButton.styleFrom(
-                        shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12)),
-                        backgroundColor: const Color(0xff7F00FF),
-                      ),
-                      child: const Text(
-                        "Sign Up",
-                        style: TextStyle(fontSize: 18),
-                      ),
-                    ),
-                  ),
-          ],
-        ),
+          ),
+          const SizedBox(height: 20),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              if (currentStep > 0)
+                TextButton(
+                  onPressed: previousStep,
+                  child: const Text("Back"),
+                ),
+              ElevatedButton(
+                onPressed: nextStep,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xff7F00FF),
+                ),
+                child: Text(currentStep == 3 ? "Sign Up" : "Next"),
+              ),
+            ],
+          ),
+          if (loading)
+            const Padding(
+              padding: EdgeInsets.only(top: 20),
+              child: CircularProgressIndicator(),
+            ),
+        ],
       ),
     );
   }
 
-  // ======================================================
-  List<Widget> _formFields(bool isWeb) {
-    double fieldWidth = isWeb ? 260 : double.infinity;
-
-    return [
-      _field(nameController, "Full Name", Icons.person, fieldWidth),
-      _field(emailController, "Email", Icons.email_outlined, fieldWidth,
-          validator: (v) {
-        if (v == null || v.trim().isEmpty) return "Email is required";
-        if (!RegExp(r'^[\w-.]+@([\w-]+\.)+[\w-]{2,4}$').hasMatch(v)) {
-          return "Enter valid email";
-        }
-        return null;
-      }),
-      _field(phoneController, "Phone Number", Icons.phone, fieldWidth,
-          validator: (v) {
-        if (v == null || v.isEmpty) return "Phone Number is required";
-        if (!RegExp(r'^[6-9]\d{9}$').hasMatch(v)) {
-          return "Enter valid 10-digit number";
-        }
-        return null;
-      }),
-      // DOB picker
-      SizedBox(
-        width: fieldWidth,
-        child: TextFormField(
-          controller: dobController,
-          readOnly: true,
+  // =========================================================
+  Widget step1() {
+    return Column(
+      children: [
+        Row(
+          children: [
+            Expanded(
+                child: _field(firstNameController, "First Name", Icons.person)),
+            const SizedBox(width: 10),
+            Expanded(
+                child: _field(lastNameController, "Last Name", Icons.person)),
+          ],
+        ),
+        const SizedBox(height: 12),
+        DropdownButtonFormField<String>(
+          value: selectedGender,
           decoration: InputDecoration(
-            labelText: "Date of Birth",
-            prefixIcon: const Icon(Icons.calendar_today),
+            labelText: "Gender",
+            prefixIcon: const Icon(Icons.wc),
+            border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+          ),
+          items: ["Male", "Female", "Other"]
+              .map((g) => DropdownMenuItem(value: g, child: Text(g)))
+              .toList(),
+          onChanged: (v) => setState(() => selectedGender = v),
+        ),
+        const SizedBox(height: 12),
+        _dobField(),
+        const SizedBox(height: 12),
+        _field(addressController, "Address", Icons.home),
+      ],
+    );
+  }
+
+  Widget step2() {
+    return Column(
+      children: [
+        _field(emailController, "Email", Icons.email),
+        const SizedBox(height: 12),
+        TextFormField(
+          controller: phoneController,
+          keyboardType: TextInputType.phone,
+          maxLength: 10,
+          decoration: InputDecoration(
+            labelText: "Phone",
+            prefixIcon: const Icon(Icons.phone),
             border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
           ),
-          validator: (v) => v == null || v.isEmpty ? "DOB required" : null,
-          onTap: () async {
-            DateTime? picked = await showDatePicker(
-              context: context,
-              initialDate: DateTime(2000),
-              firstDate: DateTime(1950),
-              lastDate: DateTime.now(),
-            );
-            if (picked != null) {
-              dobController.text =
-                  "${picked.day}/${picked.month}/${picked.year}";
-            }
-          },
         ),
-      ),
-      _field(addressController, "Address", Icons.home, fieldWidth),
-      SizedBox(
-        width: fieldWidth,
-        child: DropdownButtonFormField<String>(
+      ],
+    );
+  }
+
+  Widget step3() {
+    return Column(
+      children: [
+        DropdownButtonFormField<String>(
           value: employmentType,
           decoration: InputDecoration(
             labelText: "Employment Type",
-            border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+            ),
           ),
           items: const [
             DropdownMenuItem(value: "Salaried", child: Text("Salaried")),
@@ -386,65 +506,90 @@ class _SignupPageState extends State<SignupPage> {
           ],
           onChanged: (v) => setState(() => employmentType = v!),
         ),
-      ),
-      _passwordField(passwordController, "Password", obscurePassword, () {
-        setState(() => obscurePassword = !obscurePassword);
-      }, fieldWidth),
-      _passwordField(
-          confirmPasswordController,
-          "Confirm Password",
-          obscureConfirmPassword,
-          () {
-            setState(() => obscureConfirmPassword = !obscureConfirmPassword);
-          },
-          fieldWidth,
-          validator: (v) {
-            if (v != passwordController.text) return "Passwords do not match";
-            return null;
-          }),
-    ];
+        const SizedBox(height: 16),
+        TextFormField(
+          controller: incomeController,
+          keyboardType: TextInputType.number,
+          decoration: InputDecoration(
+            labelText: "Income Per Year (₹)",
+            prefixIcon: const Icon(Icons.currency_rupee),
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+            ),
+          ),
+        ),
+      ],
+    );
   }
 
-  // ======================================================
-  Widget _field(TextEditingController controller, String label, IconData icon,
-      double width,
-      {String? Function(String?)? validator}) {
-    return SizedBox(
-      width: width,
-      child: TextFormField(
-        controller: controller,
-        validator: validator ??
-            (v) => v == null || v.trim().isEmpty ? "$label is required" : null,
-        decoration: InputDecoration(
-          labelText: label,
-          prefixIcon: Icon(icon),
-          border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-        ),
+  Widget step4() {
+    return Column(
+      children: [
+        _passwordField(passwordController, "Password", obscurePassword, () {
+          setState(() => obscurePassword = !obscurePassword);
+        }),
+        const SizedBox(height: 12),
+        _passwordField(confirmPasswordController, "Confirm Password",
+            obscureConfirmPassword, () {
+          setState(() => obscureConfirmPassword = !obscureConfirmPassword);
+        }),
+      ],
+    );
+  }
+
+  // =========================================================
+  Widget _field(TextEditingController controller, String label, IconData icon) {
+    return TextFormField(
+      controller: controller,
+      decoration: InputDecoration(
+        labelText: label,
+        prefixIcon: Icon(icon),
+        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
       ),
     );
   }
 
-  Widget _passwordField(TextEditingController controller, String label,
-      bool obscure, VoidCallback toggle, double width,
-      {String? Function(String?)? validator}) {
-    return SizedBox(
-      width: width,
-      child: TextFormField(
-        controller: controller,
-        obscureText: obscure,
-        validator: validator ??
-            (v) => v == null || v.length < 8
-                ? "Minimum 8 characters required"
-                : null,
-        decoration: InputDecoration(
-          labelText: label,
-          prefixIcon: const Icon(Icons.lock_outline),
-          suffixIcon: IconButton(
-            icon: Icon(obscure ? Icons.visibility_off : Icons.visibility),
-            onPressed: toggle,
-          ),
-          border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+  Widget _dobField() {
+    return TextFormField(
+      controller: dobController,
+      readOnly: true,
+      decoration: InputDecoration(
+        labelText: "Date of Birth",
+        prefixIcon: const Icon(Icons.calendar_today),
+        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+      ),
+      onTap: () async {
+        DateTime? picked = await showDatePicker(
+          context: context,
+          initialDate: DateTime(2000),
+          firstDate: DateTime(1950),
+          lastDate: DateTime.now(),
+        );
+
+        if (picked != null) {
+          dobController.text = "${picked.day}/${picked.month}/${picked.year}";
+        }
+      },
+    );
+  }
+
+  Widget _passwordField(
+    TextEditingController controller,
+    String label,
+    bool obscure,
+    VoidCallback toggle,
+  ) {
+    return TextFormField(
+      controller: controller,
+      obscureText: obscure,
+      decoration: InputDecoration(
+        labelText: label,
+        prefixIcon: const Icon(Icons.lock_outline),
+        suffixIcon: IconButton(
+          icon: Icon(obscure ? Icons.visibility_off : Icons.visibility),
+          onPressed: toggle,
         ),
+        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
       ),
     );
   }

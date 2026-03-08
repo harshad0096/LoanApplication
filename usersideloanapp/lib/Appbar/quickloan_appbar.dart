@@ -1,6 +1,8 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:usersideloanapp/Login/Login.dart';
+
 import 'package:usersideloanapp/user/UserDashboard/UserProfilePage.dart';
 
 class QuickLoanAppBar extends StatelessWidget implements PreferredSizeWidget {
@@ -18,16 +20,18 @@ class QuickLoanAppBar extends StatelessWidget implements PreferredSizeWidget {
   @override
   Widget build(BuildContext context) {
     final width = MediaQuery.of(context).size.width;
+
     final isVerySmall = width < 380;
     final isTablet = width >= 700;
 
-    final uid = FirebaseAuth.instance.currentUser?.uid;
+    final user = FirebaseAuth.instance.currentUser;
+    final uid = user?.uid;
 
     return AppBar(
       backgroundColor: Colors.white,
-      elevation: 0.3,
-      automaticallyImplyLeading: false,
+      elevation: 0.5,
       toolbarHeight: 70,
+      automaticallyImplyLeading: false,
       titleSpacing: 12,
       title: Row(
         children: [
@@ -38,9 +42,8 @@ class QuickLoanAppBar extends StatelessWidget implements PreferredSizeWidget {
               icon: const Icon(Icons.menu, color: Colors.black),
             ),
 
-          /// 🔷 Logo
-          AnimatedContainer(
-            duration: const Duration(milliseconds: 250),
+          /// LOGO
+          Container(
             height: 40,
             width: 40,
             decoration: BoxDecoration(
@@ -55,7 +58,7 @@ class QuickLoanAppBar extends StatelessWidget implements PreferredSizeWidget {
 
           const SizedBox(width: 10),
 
-          /// 🏷 Title
+          /// TITLE
           if (!isVerySmall)
             const Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -65,8 +68,8 @@ class QuickLoanAppBar extends StatelessWidget implements PreferredSizeWidget {
                   "QuickLoan",
                   style: TextStyle(
                     color: Colors.black,
-                    fontSize: 17,
                     fontWeight: FontWeight.bold,
+                    fontSize: 17,
                   ),
                 ),
                 Text(
@@ -82,7 +85,7 @@ class QuickLoanAppBar extends StatelessWidget implements PreferredSizeWidget {
 
           const Spacer(),
 
-          /// 🟢 STATUS
+          /// SYSTEM STATUS
           if (isTablet)
             const Row(
               children: [
@@ -92,12 +95,56 @@ class QuickLoanAppBar extends StatelessWidget implements PreferredSizeWidget {
                   "All systems operational",
                   style: TextStyle(color: Colors.grey, fontSize: 13),
                 ),
-                SizedBox(width: 12),
+                SizedBox(width: 16),
               ],
             ),
 
-          /// 🔔 NOTIFICATION BADGE
-          if (uid != null)
+          /// =====================
+          /// USER NOT LOGGED IN
+          /// =====================
+          if (uid == null) ...[
+            TextButton(
+              onPressed: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => const LoginPage(initialRoute: ''),
+                  ),
+                );
+              },
+              child: const Text(
+                "Login",
+                style: TextStyle(fontWeight: FontWeight.w500),
+              ),
+            ),
+            const SizedBox(width: 8),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xff7F00FF),
+                foregroundColor: Colors.white,
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(10),
+                ),
+              ),
+              onPressed: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => const LoginPage(initialRoute: ''),
+                  ),
+                );
+              },
+              child: const Text("Get Started"),
+            ),
+          ],
+
+          /// =====================
+          /// USER LOGGED IN
+          /// =====================
+          if (uid != null) ...[
+            /// NOTIFICATION
             StreamBuilder<QuerySnapshot>(
               stream: FirebaseFirestore.instance
                   .collection('users')
@@ -126,11 +173,11 @@ class QuickLoanAppBar extends StatelessWidget implements PreferredSizeWidget {
                           padding: const EdgeInsets.symmetric(
                               horizontal: 6, vertical: 2),
                           decoration: BoxDecoration(
-                            color: const Color(0xffEF4444),
+                            color: Colors.red,
                             borderRadius: BorderRadius.circular(20),
                           ),
                           child: Text(
-                            count > 99 ? '99+' : count.toString(),
+                            count > 99 ? "99+" : count.toString(),
                             style: const TextStyle(
                               color: Colors.white,
                               fontSize: 11,
@@ -142,21 +189,18 @@ class QuickLoanAppBar extends StatelessWidget implements PreferredSizeWidget {
                   ],
                 );
               },
-            )
-          else
-            const Icon(Icons.notifications_outlined),
-
-          /// ⚙ Settings
-          if (!isVerySmall)
-            IconButton(
-              onPressed: () {},
-              icon: const Icon(Icons.settings_outlined),
             ),
 
-          const SizedBox(width: 6),
+            /// SETTINGS
+            if (!isVerySmall)
+              IconButton(
+                icon: const Icon(Icons.settings_outlined),
+                onPressed: () {},
+              ),
 
-          /// 👤 FIREBASE PROFILE (UPDATED)
-          if (uid != null)
+            const SizedBox(width: 6),
+
+            /// USER PROFILE
             StreamBuilder<DocumentSnapshot>(
               stream: FirebaseFirestore.instance
                   .collection('users')
@@ -164,16 +208,16 @@ class QuickLoanAppBar extends StatelessWidget implements PreferredSizeWidget {
                   .snapshots(),
               builder: (context, snapshot) {
                 String name = "User";
-                String? photoUrl;
+                String? photo;
 
                 if (snapshot.hasData && snapshot.data!.exists) {
                   final data = snapshot.data!.data() as Map<String, dynamic>;
+
                   name = data["name"] ?? "User";
-                  photoUrl = data["photoUrl"];
+                  photo = data["photoUrl"];
                 }
 
                 return InkWell(
-                  borderRadius: BorderRadius.circular(24),
                   onTap: () {
                     Navigator.push(
                       context,
@@ -182,8 +226,8 @@ class QuickLoanAppBar extends StatelessWidget implements PreferredSizeWidget {
                       ),
                     );
                   },
-                  child: AnimatedContainer(
-                    duration: const Duration(milliseconds: 250),
+                  borderRadius: BorderRadius.circular(20),
+                  child: Container(
                     padding: EdgeInsets.symmetric(
                       horizontal: isVerySmall ? 6 : 10,
                       vertical: 6,
@@ -196,17 +240,16 @@ class QuickLoanAppBar extends StatelessWidget implements PreferredSizeWidget {
                       mainAxisSize: MainAxisSize.min,
                       children: [
                         CircleAvatar(
-                          radius: 11,
+                          radius: 12,
                           backgroundColor: Colors.purple,
-                          backgroundImage:
-                              (photoUrl != null && photoUrl.isNotEmpty)
-                                  ? NetworkImage(photoUrl)
-                                  : null,
-                          child: (photoUrl == null || photoUrl.isEmpty)
+                          backgroundImage: (photo != null && photo.isNotEmpty)
+                              ? NetworkImage(photo)
+                              : null,
+                          child: (photo == null || photo.isEmpty)
                               ? Text(
-                                  name.isNotEmpty ? name[0].toUpperCase() : "U",
+                                  name[0].toUpperCase(),
                                   style: const TextStyle(
-                                      color: Colors.white, fontSize: 9),
+                                      color: Colors.white, fontSize: 10),
                                 )
                               : null,
                         ),
@@ -221,9 +264,8 @@ class QuickLoanAppBar extends StatelessWidget implements PreferredSizeWidget {
                   ),
                 );
               },
-            )
-          else
-            const SizedBox(),
+            ),
+          ],
         ],
       ),
     );

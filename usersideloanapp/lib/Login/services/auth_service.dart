@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class AuthService {
   final FirebaseAuth _auth = FirebaseAuth.instance;
@@ -259,5 +260,33 @@ class AuthService {
       default:
         return e.message ?? "Authentication error.";
     }
+  }
+
+  // Save login credentials to SharedPreferences
+  Future<void> saveSession(Map<String, dynamic> data) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('uid', data['uid']);
+    await prefs.setString('role', data['role']);
+    await prefs.setString('email', data['email'] ?? '');
+    await prefs.setInt('loginAt', DateTime.now().millisecondsSinceEpoch);
+  }
+
+  // Clear session on logout
+  Future<void> clearSession() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.clear();
+  }
+
+  // Get saved session
+  Future<Map<String, dynamic>?> getSavedSession() async {
+    final prefs = await SharedPreferences.getInstance();
+    final uid = prefs.getString('uid');
+    final role = prefs.getString('role');
+    final email = prefs.getString('email');
+
+    if (uid != null && role != null) {
+      return {'uid': uid, 'role': role, 'email': email};
+    }
+    return null;
   }
 }

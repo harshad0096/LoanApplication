@@ -11,7 +11,8 @@ class UserProfilePage extends StatefulWidget {
   State<UserProfilePage> createState() => _UserProfilePageState();
 }
 
-class _UserProfilePageState extends State<UserProfilePage> {
+class _UserProfilePageState extends State<UserProfilePage>
+    with TickerProviderStateMixin {
   final user = FirebaseAuth.instance.currentUser;
   final usersRef = FirebaseFirestore.instance.collection('users');
 
@@ -30,7 +31,7 @@ class _UserProfilePageState extends State<UserProfilePage> {
   File? profileImage;
   String photoUrl = "";
 
-  bool get isMobile => MediaQuery.of(context).size.width < 900;
+  late AnimationController _animController;
 
   // ================= INIT =================
 
@@ -38,9 +39,14 @@ class _UserProfilePageState extends State<UserProfilePage> {
   void initState() {
     super.initState();
     _loadProfile();
+
+    _animController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 600),
+    )..forward();
   }
 
-  // ================= LOAD =================
+  // ================= LOAD PROFILE =================
 
   Future<void> _loadProfile() async {
     if (user == null) return;
@@ -64,7 +70,7 @@ class _UserProfilePageState extends State<UserProfilePage> {
     setState(() => isLoading = false);
   }
 
-  // ================= SAVE =================
+  // ================= SAVE PROFILE =================
 
   Future<void> _saveProfile() async {
     if (user == null) return;
@@ -98,9 +104,6 @@ class _UserProfilePageState extends State<UserProfilePage> {
 
     if (picked != null) {
       setState(() => profileImage = File(picked.path));
-
-      // ⚠️ TODO: Upload to Firebase Storage
-      // After upload → set photoUrl
     }
   }
 
@@ -108,9 +111,14 @@ class _UserProfilePageState extends State<UserProfilePage> {
 
   Future<void> logout() async {
     await FirebaseAuth.instance.signOut();
+
+    Navigator.of(context).pushNamedAndRemoveUntil(
+      "/login",
+      (route) => false,
+    );
   }
 
-  // ================= MAIN =================
+  // ================= BUILD =================
 
   @override
   Widget build(BuildContext context) {
@@ -118,67 +126,123 @@ class _UserProfilePageState extends State<UserProfilePage> {
       return const Center(child: CircularProgressIndicator());
     }
 
-    return SingleChildScrollView(
+    return FadeTransition(
+      opacity: _animController,
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          children: [
+            _profileHeader(),
+            const SizedBox(height: 20),
+            _profileCard(),
+            const SizedBox(height: 20),
+            const SizedBox(height: 20),
+            _accountOverview(),
+            const SizedBox(height: 20),
+            _kycItem("PAN Card", panVerified),
+            _kycItem("Aadhaar Card", aadhaarVerified),
+            const SizedBox(height: 20),
+            _kycSection(),
+            const SizedBox(height: 20),
+            _securitySection(),
+            const SizedBox(height: 20),
+            _logoutButton(),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // ================= PROFILE HEADER =================
+
+  Widget _profileHeader() {
+    return Container(
       padding: const EdgeInsets.all(24),
-      child: Column(
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          colors: [Color(0xff6366F1), Color(0xff8B5CF6)],
+        ),
+        borderRadius: BorderRadius.circular(22),
+      ),
+      child: Row(
         children: [
-          _profileCard(),
-          const SizedBox(height: 20),
-          _kycCard(),
-          const SizedBox(height: 20),
-          _securityCard(),
-          const SizedBox(height: 20),
-          _logoutCard(),
+          CircleAvatar(
+            radius: 40,
+            backgroundImage:
+                photoUrl.isNotEmpty ? NetworkImage(photoUrl) : null,
+            child: photoUrl.isEmpty
+                ? const Icon(Icons.person, size: 35, color: Colors.white)
+                : null,
+          ),
+          const SizedBox(width: 16),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  nameCtrl.text,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 20,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                Text(
+                  emailCtrl.text,
+                  style: const TextStyle(
+                    color: Colors.white70,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                LinearProgressIndicator(
+                  value: _profileCompletion(),
+                  backgroundColor: Colors.white24,
+                  color: Colors.white,
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  "Profile ${(_profileCompletion() * 100).toInt()}% Complete",
+                  style: const TextStyle(color: Colors.white70, fontSize: 12),
+                )
+              ],
+            ),
+          )
         ],
       ),
     );
   }
 
-  // ================= PROFILE =================
+  double _profileCompletion() {
+    int total = 6;
+    int completed = 0;
+
+    if (nameCtrl.text.isNotEmpty) completed++;
+    if (emailCtrl.text.isNotEmpty) completed++;
+    if (phoneCtrl.text.isNotEmpty) completed++;
+    if (panVerified) completed++;
+    if (aadhaarVerified) completed++;
+    if (bankVerified) completed++;
+
+    return completed / total;
+  }
+  // ================= PROFILE CARD =================
 
   Widget _profileCard() {
     return Container(
-      padding: const EdgeInsets.all(24),
-      decoration: _glass(),
+      padding: const EdgeInsets.all(22),
+      decoration: _card(),
       child: Column(
         children: [
-          Stack(
-            children: [
-              CircleAvatar(
-                radius: 48,
-                backgroundImage: profileImage != null
-                    ? FileImage(profileImage!)
-                    : (photoUrl.isNotEmpty
-                        ? NetworkImage(photoUrl) as ImageProvider
-                        : null),
-                child: profileImage == null && photoUrl.isEmpty
-                    ? const Icon(Icons.person, size: 40)
-                    : null,
-              ),
-              Positioned(
-                bottom: 0,
-                right: 0,
-                child: InkWell(
-                  onTap: pickImage,
-                  child: const CircleAvatar(
-                    radius: 16,
-                    child: Icon(Icons.camera_alt, size: 16),
-                  ),
-                ),
-              )
-            ],
-          ),
-          const SizedBox(height: 18),
           _field("Full Name", nameCtrl),
           _field("Email", emailCtrl),
           _field("Phone", phoneCtrl),
-          const SizedBox(height: 16),
+          const SizedBox(height: 18),
           Row(
             children: [
               Expanded(
                 child: OutlinedButton(
                   onPressed: () => setState(() => isEditing = !isEditing),
-                  child: Text(isEditing ? "Cancel" : "Edit"),
+                  child: Text(isEditing ? "Cancel" : "Edit Profile"),
                 ),
               ),
               const SizedBox(width: 12),
@@ -199,6 +263,77 @@ class _UserProfilePageState extends State<UserProfilePage> {
     );
   }
 
+  Widget _accountOverview() {
+    return Row(
+      children: [
+        Expanded(
+          child: _statCard(
+            "Credit Score",
+            "742",
+            Icons.trending_up,
+            Colors.green,
+          ),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: _statCard(
+            "Active Loans",
+            "2",
+            Icons.account_balance,
+            Colors.orange,
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _statCard(String title, String value, IconData icon, Color color) {
+    return Container(
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(18),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(.05),
+            blurRadius: 12,
+          )
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(icon, color: color),
+          const SizedBox(height: 10),
+          Text(
+            value,
+            style: const TextStyle(
+              fontSize: 20,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          Text(
+            title,
+            style: const TextStyle(color: Colors.grey),
+          )
+        ],
+      ),
+    );
+  }
+
+  Widget _kycItem(String title, bool verified) {
+    return ListTile(
+      leading: Icon(
+        verified ? Icons.verified : Icons.pending,
+        color: verified ? Colors.green : Colors.orange,
+      ),
+      title: Text(title),
+      trailing: Chip(
+        label: Text(verified ? "Verified" : "Pending"),
+      ),
+    );
+  }
+
   Widget _field(String label, TextEditingController ctrl) {
     return Padding(
       padding: const EdgeInsets.only(top: 14),
@@ -208,25 +343,31 @@ class _UserProfilePageState extends State<UserProfilePage> {
         decoration: InputDecoration(
           labelText: label,
           filled: true,
-          fillColor: Theme.of(context).cardColor,
+          fillColor: Colors.grey.shade100,
           border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(14),
+            borderRadius: BorderRadius.circular(12),
           ),
         ),
       ),
     );
   }
 
-  // ================= KYC =================
+  // ================= KYC SECTION =================
 
-  Widget _kycCard() {
+  Widget _kycSection() {
     return Container(
-      padding: const EdgeInsets.all(22),
-      decoration: _glass(),
+      padding: const EdgeInsets.all(20),
+      decoration: _card(),
       child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          const Text(
+            "KYC Verification",
+            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+          ),
+          const SizedBox(height: 10),
           _kycTile("PAN Card", panVerified),
-          _kycTile("Aadhaar", aadhaarVerified),
+          _kycTile("Aadhaar Card", aadhaarVerified),
           _kycTile("Bank Account", bankVerified),
         ],
       ),
@@ -237,7 +378,7 @@ class _UserProfilePageState extends State<UserProfilePage> {
     return ListTile(
       contentPadding: EdgeInsets.zero,
       leading: Icon(
-        verified ? Icons.verified : Icons.pending,
+        verified ? Icons.verified : Icons.pending_actions,
         color: verified ? Colors.green : Colors.orange,
       ),
       title: Text(title),
@@ -245,6 +386,7 @@ class _UserProfilePageState extends State<UserProfilePage> {
         verified ? "Verified" : "Pending",
         style: TextStyle(
           color: verified ? Colors.green : Colors.orange,
+          fontWeight: FontWeight.w600,
         ),
       ),
     );
@@ -252,13 +394,14 @@ class _UserProfilePageState extends State<UserProfilePage> {
 
   // ================= SECURITY =================
 
-  Widget _securityCard() {
+  Widget _securitySection() {
     return Container(
-      padding: const EdgeInsets.all(22),
-      decoration: _glass(),
+      padding: const EdgeInsets.all(20),
+      decoration: _card(),
       child: SwitchListTile(
         value: biometricEnabled,
-        title: const Text("Biometric Login"),
+        title: const Text("Enable Biometric Login"),
+        activeColor: const Color(0xff6366F1),
         onChanged: (v) => setState(() => biometricEnabled = v),
       ),
     );
@@ -266,27 +409,34 @@ class _UserProfilePageState extends State<UserProfilePage> {
 
   // ================= LOGOUT =================
 
-  Widget _logoutCard() {
-    return Container(
-      decoration: _glass(),
-      child: ListTile(
-        leading: const Icon(Icons.logout, color: Colors.red),
-        title: const Text("Logout"),
-        onTap: logout,
+  Widget _logoutButton() {
+    return SizedBox(
+      width: double.infinity,
+      child: ElevatedButton.icon(
+        icon: const Icon(Icons.logout),
+        label: const Text("Logout"),
+        style: ElevatedButton.styleFrom(
+          backgroundColor: Colors.red,
+          padding: const EdgeInsets.symmetric(vertical: 14),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(14),
+          ),
+        ),
+        onPressed: logout,
       ),
     );
   }
 
-  // ================= GLASS =================
+  // ================= CARD =================
 
-  BoxDecoration _glass() {
+  BoxDecoration _card() {
     return BoxDecoration(
       color: Theme.of(context).cardColor,
-      borderRadius: BorderRadius.circular(20),
+      borderRadius: BorderRadius.circular(18),
       boxShadow: [
         BoxShadow(
           color: Colors.black.withOpacity(.05),
-          blurRadius: 18,
+          blurRadius: 14,
         )
       ],
     );
