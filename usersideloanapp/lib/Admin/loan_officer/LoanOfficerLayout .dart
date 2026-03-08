@@ -22,6 +22,7 @@ class _LoanOfficerLayoutState extends State<LoanOfficerLayout> {
     currentRoute = widget.initialRoute;
   }
 
+  /// PAGE SWITCH
   Widget _getPage() {
     switch (currentRoute) {
       case '/loan_officer/applications':
@@ -34,6 +35,37 @@ class _LoanOfficerLayoutState extends State<LoanOfficerLayout> {
     }
   }
 
+  /// MOBILE NAV INDEX
+  int _getBottomIndex() {
+    switch (currentRoute) {
+      case '/loan_officer/dashboard':
+        return 0;
+      case '/loan_officer/applications':
+        return 1;
+      case '/loan_officer/verifications':
+        return 2;
+      default:
+        return 0;
+    }
+  }
+
+  /// MOBILE NAVIGATION
+  void _onBottomTap(int index) {
+    switch (index) {
+      case 0:
+        currentRoute = '/loan_officer/dashboard';
+        break;
+      case 1:
+        currentRoute = '/loan_officer/applications';
+        break;
+      case 2:
+        currentRoute = '/loan_officer/verifications';
+        break;
+    }
+
+    setState(() {});
+  }
+
   @override
   Widget build(BuildContext context) {
     final bool wide = MediaQuery.of(context).size.width > 900;
@@ -44,43 +76,53 @@ class _LoanOfficerLayoutState extends State<LoanOfficerLayout> {
         backgroundColor: Colors.white,
         foregroundColor: Colors.black,
         elevation: 0,
-        leading: wide
-            ? null
-            : Builder(
-                builder: (context) => IconButton(
-                  icon: const Icon(Icons.menu),
-                  onPressed: () => Scaffold.of(context).openDrawer(),
+      ),
+
+      /// =========================
+      /// BODY
+      /// =========================
+      body: wide
+          ? Row(
+              children: [
+                /// DESKTOP SIDEBAR
+                SideNavbar(
+                  selectedRoute: currentRoute,
+                  onNavigate: (route) {
+                    setState(() => currentRoute = route);
+                  },
                 ),
-              ),
-      ),
 
-      /// MOBILE DRAWER
-      drawer: wide
+                Expanded(child: _getPage()),
+              ],
+            )
+
+          /// MOBILE VIEW
+          : _getPage(),
+
+      /// =========================
+      /// MOBILE BOTTOM NAVBAR
+      /// =========================
+      bottomNavigationBar: wide
           ? null
-          : Drawer(
-              child: SideNavbar(
-                selectedRoute: currentRoute,
-                onNavigate: (route) {
-                  setState(() => currentRoute = route);
-                  Navigator.pop(context);
-                },
-              ),
+          : BottomNavigationBar(
+              currentIndex: _getBottomIndex(),
+              onTap: _onBottomTap,
+              type: BottomNavigationBarType.fixed,
+              items: const [
+                BottomNavigationBarItem(
+                  icon: Icon(Icons.dashboard),
+                  label: "Dashboard",
+                ),
+                BottomNavigationBarItem(
+                  icon: Icon(Icons.description),
+                  label: "Applications",
+                ),
+                BottomNavigationBarItem(
+                  icon: Icon(Icons.verified),
+                  label: "Verify",
+                ),
+              ],
             ),
-
-      body: Row(
-        children: [
-          /// DESKTOP SIDEBAR
-          if (wide)
-            SideNavbar(
-              selectedRoute: currentRoute,
-              onNavigate: (route) {
-                setState(() => currentRoute = route);
-              },
-            ),
-
-          Expanded(child: _getPage()),
-        ],
-      ),
     );
   }
 }

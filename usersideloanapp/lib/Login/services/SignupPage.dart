@@ -1,6 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:usersideloanapp/Login/OTPVerificationPage.dart';
-import 'package:usersideloanapp/Login/services/OTPService.dart';
 import '../services/auth_service.dart';
 import 'package:usersideloanapp/Appbar/quickloan_appbar.dart';
 
@@ -13,18 +11,12 @@ class SignupPage extends StatefulWidget {
 
 class _SignupPage extends State<SignupPage> {
   final AuthService _authService = AuthService();
-
   final PageController _pageController = PageController();
 
+  String? selectedGender;
   int currentStep = 0;
   bool loading = false;
-  final OTPService _otpService = OTPService();
 
-  String verificationId = "";
-  final otpController = TextEditingController();
-
-  bool otpSent = false;
-  bool otpVerified = false;
   // STEP 1
   final firstNameController = TextEditingController();
   final middleNameController = TextEditingController();
@@ -38,6 +30,7 @@ class _SignupPage extends State<SignupPage> {
 
   // STEP 3
   String employmentType = "Salaried";
+  final incomeController = TextEditingController();
 
   // STEP 4
   final passwordController = TextEditingController();
@@ -46,23 +39,18 @@ class _SignupPage extends State<SignupPage> {
   bool obscurePassword = true;
   bool obscureConfirmPassword = true;
 
-  double get progress => (currentStep + 1) / 5;
+  double get progress => (currentStep + 1) / 4;
 
   // =========================================================
   void showError(String message) {
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(message),
-        backgroundColor: Colors.red,
-      ),
+      SnackBar(content: Text(message), backgroundColor: Colors.red),
     );
   }
-  //otp
 
   // =========================================================
   bool validateCurrentStep() {
     switch (currentStep) {
-      // STEP 1
       case 0:
         if (firstNameController.text.trim().isEmpty) {
           showError("First Name required");
@@ -79,21 +67,6 @@ class _SignupPage extends State<SignupPage> {
           return false;
         }
 
-        final parts = dobController.text.split("/");
-
-        final dob = DateTime(
-          int.parse(parts[2]),
-          int.parse(parts[1]),
-          int.parse(parts[0]),
-        );
-
-        final age = DateTime.now().year - dob.year;
-
-        if (age < 18) {
-          showError("You must be at least 18 years old");
-          return false;
-        }
-
         if (addressController.text.trim().isEmpty) {
           showError("Address required");
           return false;
@@ -101,38 +74,34 @@ class _SignupPage extends State<SignupPage> {
 
         return true;
 
-      // STEP 2
       case 1:
-        if (!RegExp(r'\S+@\S+\.\S+').hasMatch(emailController.text)) {
+        if (!RegExp(r'^[^@]+@[^@]+\.[^@]+')
+            .hasMatch(emailController.text.trim())) {
           showError("Enter valid email");
           return false;
         }
 
-        if (!RegExp(r'^[0-9]{10}$').hasMatch(phoneController.text)) {
-          showError("Enter valid 10 digit phone");
+        if (!RegExp(r'^[0-9]{10}$').hasMatch(phoneController.text.trim())) {
+          showError("Enter valid 10 digit phone number");
           return false;
         }
 
         return true;
 
-      // STEP 3
       case 2:
-        if (!otpVerified) {
-          showError("Please verify phone number with OTP");
-          return false;
-        }
-
-        return true;
-      case 3:
         if (employmentType.isEmpty) {
           showError("Select employment type");
           return false;
         }
 
+        if (incomeController.text.isEmpty) {
+          showError("Enter yearly income");
+          return false;
+        }
+
         return true;
 
-      // STEP 4
-      case 4:
+      case 3:
         if (passwordController.text.length < 8) {
           showError("Password must be minimum 8 characters");
           return false;
@@ -149,56 +118,10 @@ class _SignupPage extends State<SignupPage> {
     return false;
   }
 
-//otp functiona
-  Future<void> sendOTP() async {
-    setState(() => loading = true);
-
-    await _otpService.sendOTP(
-      phone: "+91${phoneController.text}",
-      codeSent: (id) {
-        verificationId = id;
-
-        setState(() {
-          otpSent = true;
-          loading = false;
-        });
-      },
-      error: (msg) {
-        showError(msg);
-        setState(() => loading = false);
-      },
-    );
-  }
-
-  Future<void> verifyOTP() async {
-    if (otpController.text.length != 6) {
-      showError("Enter valid OTP");
-      return;
-    }
-
-    setState(() => loading = true);
-
-    final result = await _otpService.verifyOTP(
-      verificationId: verificationId,
-      otp: otpController.text.trim(),
-    );
-
-    setState(() => loading = false);
-
-    if (result == null) {
-      setState(() {
-        otpVerified = true;
-      });
-
-      ScaffoldMessenger.of(context)
-          .showSnackBar(const SnackBar(content: Text("Phone Verified")));
-    } else {
-      showError(result);
-    }
-  }
-
   // =========================================================
   Future<void> signUp() async {
+    if (loading) return;
+
     if (!validateCurrentStep()) return;
 
     final parts = dobController.text.split("/");
@@ -237,6 +160,50 @@ class _SignupPage extends State<SignupPage> {
     } else {
       showError(result);
     }
+  }
+
+  // =========================================================
+  void nextStep() {
+    if (!validateCurrentStep()) return;
+
+    if (currentStep < 3) {
+      setState(() => currentStep++);
+
+      _pageController.nextPage(
+        duration: const Duration(milliseconds: 400),
+        curve: Curves.easeInOut,
+      );
+    } else {
+      signUp();
+    }
+  }
+
+  void previousStep() {
+    if (currentStep == 0) return;
+
+    setState(() => currentStep--);
+
+    _pageController.previousPage(
+      duration: const Duration(milliseconds: 400),
+      curve: Curves.easeInOut,
+    );
+  }
+
+  // =========================================================
+  @override
+  void dispose() {
+    firstNameController.dispose();
+    middleNameController.dispose();
+    lastNameController.dispose();
+    dobController.dispose();
+    addressController.dispose();
+    emailController.dispose();
+    phoneController.dispose();
+    incomeController.dispose();
+    passwordController.dispose();
+    confirmPasswordController.dispose();
+    _pageController.dispose();
+    super.dispose();
   }
 
   // =========================================================
@@ -295,33 +262,106 @@ class _SignupPage extends State<SignupPage> {
   // =========================================================
   Widget _gradientSection({bool isMobile = false}) {
     return Container(
-      width: double.infinity,
-      padding: EdgeInsets.symmetric(
-        vertical: isMobile ? 60 : 80,
-        horizontal: isMobile ? 20 : 60,
-      ),
+      clipBehavior: Clip.hardEdge,
+      padding: const EdgeInsets.all(60),
       decoration: const BoxDecoration(
         gradient: LinearGradient(
           colors: [Color(0xff7F00FF), Color(0xffE100FF)],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
         ),
         borderRadius: BorderRadius.only(
-          bottomLeft: Radius.circular(30),
-          bottomRight: Radius.circular(30),
+          bottomLeft: Radius.circular(60),
+          bottomRight: Radius.circular(60),
         ),
       ),
-      child: const Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+      child: Row(
         children: [
-          Text(
-            "QuickLoan",
-            style: TextStyle(
-                color: Colors.white, fontSize: 22, fontWeight: FontWeight.bold),
+          /// LEFT TEXT SECTION WITH SLIDE ANIMATION
+          Expanded(
+            flex: 5,
+            child: TweenAnimationBuilder(
+              duration: const Duration(milliseconds: 900),
+              tween: Tween<double>(begin: 60, end: 0),
+              curve: Curves.easeOut,
+              builder: (context, double value, child) {
+                return Transform.translate(
+                  offset: Offset(0, value),
+                  child: Opacity(
+                    opacity: value == 0 ? 1 : 0.9,
+                    child: child,
+                  ),
+                );
+              },
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Container(
+                    height: 40,
+                    width: 40,
+                    decoration: BoxDecoration(
+                      gradient: const LinearGradient(
+                        colors: [Color(0xff7B61FF), Color(0xffA855F7)],
+                      ),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: const Icon(
+                      Icons.currency_rupee,
+                      color: Colors.white,
+                      size: 20,
+                    ),
+                  ),
+                  const SizedBox(height: 30),
+                  const Text(
+                    "QuickLoan",
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 22,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  const SizedBox(height: 40),
+                  const Text(
+                    "Smart Loans\nfor Smart People",
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 42,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  const SizedBox(height: 20),
+                  const Text(
+                    "Get instant personal, home, car and business loans with minimal documentation.",
+                    style: TextStyle(
+                      color: Colors.white70,
+                      fontSize: 16,
+                    ),
+                  ),
+                ],
+              ),
+            ),
           ),
-          SizedBox(height: 30),
-          Text(
-            "Create Your\nAccount",
-            style: TextStyle(
-                color: Colors.white, fontSize: 34, fontWeight: FontWeight.bold),
+
+          /// RIGHT IMAGE WITH FLOATING ANIMATION
+          Expanded(
+            flex: 5,
+            child: TweenAnimationBuilder(
+              tween: Tween<double>(begin: -12, end: 12),
+              duration: const Duration(seconds: 3),
+              curve: Curves.easeInOut,
+              builder: (context, double value, child) {
+                return Transform.translate(
+                  offset: Offset(0, value),
+                  child: child,
+                );
+              },
+              child: Image.asset(
+                "assets/images/loan_signup.png",
+                height: 320,
+                fit: BoxFit.contain,
+              ),
+            ),
           ),
         ],
       ),
@@ -346,232 +386,38 @@ class _SignupPage extends State<SignupPage> {
             "Create Account",
             style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
           ),
-
           const SizedBox(height: 20),
-
-          // STEP INDICATOR
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: List.generate(4, (index) {
-              bool active = index <= currentStep;
-
-              return AnimatedContainer(
-                duration: const Duration(milliseconds: 300),
-                height: 34,
-                width: 34,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color:
-                      active ? const Color(0xff7F00FF) : Colors.grey.shade300,
-                ),
-                child: Center(
-                  child: active
-                      ? const Icon(Icons.check, color: Colors.white, size: 18)
-                      : Text("${index + 1}"),
-                ),
-              );
-            }),
+          LinearProgressIndicator(
+            value: progress,
+            minHeight: 8,
+            backgroundColor: Colors.grey.shade300,
+            valueColor: const AlwaysStoppedAnimation(Color(0xff7F00FF)),
           ),
-
           const SizedBox(height: 20),
-
-          ClipRRect(
-            borderRadius: BorderRadius.circular(20),
-            child: LinearProgressIndicator(
-              value: progress,
-              minHeight: 8,
-              backgroundColor: Colors.grey.shade300,
-              valueColor: const AlwaysStoppedAnimation(Color(0xff7F00FF)),
-            ),
-          ),
-
-          const SizedBox(height: 20),
-
           SizedBox(
             height: 260,
             child: PageView(
               controller: _pageController,
               physics: const NeverScrollableScrollPhysics(),
               children: [
-                // STEP 1
-                Column(
-                  children: [
-                    Row(
-                      children: [
-                        Expanded(
-                          child: _field(
-                            firstNameController,
-                            "First Name",
-                            Icons.person_outline,
-                          ),
-                        ),
-                        const SizedBox(width: 10),
-                        Expanded(
-                          child: _field(
-                            middleNameController,
-                            "Middle Name",
-                            Icons.person_outline,
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 12),
-                    _field(
-                      lastNameController,
-                      "Last Name",
-                      Icons.person,
-                    ),
-                    const SizedBox(height: 12),
-                    _dobField(),
-                    const SizedBox(height: 12),
-                    _field(
-                      addressController,
-                      "Address",
-                      Icons.home,
-                    ),
-                  ],
-                ),
-
-                // STEP 2
-                Column(
-                  children: [
-                    _field(emailController, "Email", Icons.email),
-                    const SizedBox(height: 12),
-                    _field(phoneController, "Phone", Icons.phone),
-                  ],
-                ),
-
-                // STEP 3
-                Column(
-                  children: [
-                    if (!otpSent)
-                      SizedBox(
-                        width: double.infinity,
-                        child: ElevatedButton(
-                          onPressed: sendOTP,
-                          child: const Text("Send OTP"),
-                        ),
-                      ),
-                    if (otpSent) ...[
-                      TextField(
-                        controller: otpController,
-                        keyboardType: TextInputType.number,
-                        maxLength: 6,
-                        decoration: InputDecoration(
-                          labelText: "Enter OTP",
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: 10),
-                      SizedBox(
-                        width: double.infinity,
-                        child: ElevatedButton(
-                          onPressed: verifyOTP,
-                          child: const Text("Verify OTP"),
-                        ),
-                      ),
-                      TextButton(
-                        onPressed: sendOTP,
-                        child: const Text("Resend OTP"),
-                      ),
-                      if (otpVerified)
-                        const Text(
-                          "Phone Verified ✓",
-                          style: TextStyle(color: Colors.green),
-                        ),
-                    ],
-                  ],
-                ),
-                DropdownButtonFormField<String>(
-                  value: employmentType,
-                  decoration: InputDecoration(
-                    labelText: "Employment Type",
-                    border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12)),
-                  ),
-                  items: const [
-                    DropdownMenuItem(
-                        value: "Salaried", child: Text("Salaried")),
-                    DropdownMenuItem(
-                        value: "Self Employed", child: Text("Self Employed")),
-                  ],
-                  onChanged: (v) => setState(() => employmentType = v!),
-                ),
-
-                // STEP 4
-                Column(
-                  children: [
-                    _passwordField(
-                        passwordController, "Password", obscurePassword, () {
-                      setState(() => obscurePassword = !obscurePassword);
-                    }),
-                    const SizedBox(height: 12),
-                    _passwordField(confirmPasswordController,
-                        "Confirm Password", obscureConfirmPassword, () {
-                      setState(() =>
-                          obscureConfirmPassword = !obscureConfirmPassword);
-                    }),
-                  ],
-                ),
+                step1(),
+                step2(),
+                step3(),
+                step4(),
               ],
             ),
           ),
-
           const SizedBox(height: 20),
-
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               if (currentStep > 0)
                 TextButton(
-                  onPressed: () async {
-                    if (!validateCurrentStep()) return;
-
-                    // STEP 2 → PHONE OTP VERIFICATION
-                    if (currentStep == 1) {
-                      final verified = await Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) => OTPVerificationPage(
-                            phone: "+91${phoneController.text}",
-                          ),
-                        ),
-                      );
-
-                      // if OTP not verified stop here
-                      if (verified != true) return;
-                    }
-
-                    if (currentStep < 3) {
-                      setState(() => currentStep++);
-
-                      _pageController.nextPage(
-                        duration: const Duration(milliseconds: 400),
-                        curve: Curves.easeInOut,
-                      );
-                    } else {
-                      signUp();
-                    }
-                  },
+                  onPressed: previousStep,
                   child: const Text("Back"),
                 ),
               ElevatedButton(
-                onPressed: () {
-                  if (!validateCurrentStep()) return;
-
-                  if (currentStep < 3) {
-                    setState(() => currentStep++);
-
-                    _pageController.nextPage(
-                      duration: const Duration(milliseconds: 400),
-                      curve: Curves.easeInOut,
-                    );
-                  } else {
-                    signUp();
-                  }
-                },
+                onPressed: nextStep,
                 style: ElevatedButton.styleFrom(
                   backgroundColor: const Color(0xff7F00FF),
                 ),
@@ -579,7 +425,6 @@ class _SignupPage extends State<SignupPage> {
               ),
             ],
           ),
-
           if (loading)
             const Padding(
               padding: EdgeInsets.only(top: 20),
@@ -587,6 +432,108 @@ class _SignupPage extends State<SignupPage> {
             ),
         ],
       ),
+    );
+  }
+
+  // =========================================================
+  Widget step1() {
+    return Column(
+      children: [
+        Row(
+          children: [
+            Expanded(
+                child: _field(firstNameController, "First Name", Icons.person)),
+            const SizedBox(width: 10),
+            Expanded(
+                child: _field(lastNameController, "Last Name", Icons.person)),
+          ],
+        ),
+        const SizedBox(height: 12),
+        DropdownButtonFormField<String>(
+          value: selectedGender,
+          decoration: InputDecoration(
+            labelText: "Gender",
+            prefixIcon: const Icon(Icons.wc),
+            border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+          ),
+          items: ["Male", "Female", "Other"]
+              .map((g) => DropdownMenuItem(value: g, child: Text(g)))
+              .toList(),
+          onChanged: (v) => setState(() => selectedGender = v),
+        ),
+        const SizedBox(height: 12),
+        _dobField(),
+        const SizedBox(height: 12),
+        _field(addressController, "Address", Icons.home),
+      ],
+    );
+  }
+
+  Widget step2() {
+    return Column(
+      children: [
+        _field(emailController, "Email", Icons.email),
+        const SizedBox(height: 12),
+        TextFormField(
+          controller: phoneController,
+          keyboardType: TextInputType.phone,
+          maxLength: 10,
+          decoration: InputDecoration(
+            labelText: "Phone",
+            prefixIcon: const Icon(Icons.phone),
+            border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget step3() {
+    return Column(
+      children: [
+        DropdownButtonFormField<String>(
+          value: employmentType,
+          decoration: InputDecoration(
+            labelText: "Employment Type",
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+            ),
+          ),
+          items: const [
+            DropdownMenuItem(value: "Salaried", child: Text("Salaried")),
+            DropdownMenuItem(
+                value: "Self Employed", child: Text("Self Employed")),
+          ],
+          onChanged: (v) => setState(() => employmentType = v!),
+        ),
+        const SizedBox(height: 16),
+        TextFormField(
+          controller: incomeController,
+          keyboardType: TextInputType.number,
+          decoration: InputDecoration(
+            labelText: "Income Per Year (₹)",
+            prefixIcon: const Icon(Icons.currency_rupee),
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget step4() {
+    return Column(
+      children: [
+        _passwordField(passwordController, "Password", obscurePassword, () {
+          setState(() => obscurePassword = !obscurePassword);
+        }),
+        const SizedBox(height: 12),
+        _passwordField(confirmPasswordController, "Confirm Password",
+            obscureConfirmPassword, () {
+          setState(() => obscureConfirmPassword = !obscureConfirmPassword);
+        }),
+      ],
     );
   }
 
@@ -602,7 +549,6 @@ class _SignupPage extends State<SignupPage> {
     );
   }
 
-  // =========================================================
   Widget _dobField() {
     return TextFormField(
       controller: dobController,
@@ -627,7 +573,6 @@ class _SignupPage extends State<SignupPage> {
     );
   }
 
-  // =========================================================
   Widget _passwordField(
     TextEditingController controller,
     String label,

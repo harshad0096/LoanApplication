@@ -37,7 +37,7 @@ class _SplashScreenState extends State<SplashScreen>
 
   // ✅ PRODUCTION SAFE NAVIGATION
   Future<void> _navigate() async {
-    await Future.delayed(const Duration(seconds: 2));
+    await Future.delayed(const Duration(seconds: 5));
 
     if (!mounted) return;
 

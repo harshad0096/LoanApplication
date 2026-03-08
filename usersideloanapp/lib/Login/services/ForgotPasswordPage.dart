@@ -116,11 +116,8 @@ class _ForgotPasswordPageState extends State<ForgotPasswordPage> {
   // ======================================================
   Widget _gradientSection({bool isMobile = false}) {
     return Container(
-      width: double.infinity,
-      padding: EdgeInsets.symmetric(
-        vertical: isMobile ? 60 : 80,
-        horizontal: isMobile ? 20 : 60,
-      ),
+      clipBehavior: Clip.hardEdge,
+      padding: const EdgeInsets.all(60),
       decoration: const BoxDecoration(
         gradient: LinearGradient(
           colors: [Color(0xff7F00FF), Color(0xffE100FF)],
@@ -128,28 +125,96 @@ class _ForgotPasswordPageState extends State<ForgotPasswordPage> {
           end: Alignment.bottomRight,
         ),
         borderRadius: BorderRadius.only(
-          bottomLeft: Radius.circular(30),
-          bottomRight: Radius.circular(30),
+          bottomLeft: Radius.circular(60),
+          bottomRight: Radius.circular(60),
         ),
       ),
-      child: const Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+      child: Row(
         children: [
-          Text(
-            "QuickLoan",
-            style: TextStyle(
-              color: Colors.white,
-              fontSize: 22,
-              fontWeight: FontWeight.bold,
+          /// LEFT TEXT SECTION WITH SLIDE ANIMATION
+          Expanded(
+            flex: 5,
+            child: TweenAnimationBuilder(
+              duration: const Duration(milliseconds: 900),
+              tween: Tween<double>(begin: 60, end: 0),
+              curve: Curves.easeOut,
+              builder: (context, double value, child) {
+                return Transform.translate(
+                  offset: Offset(0, value),
+                  child: Opacity(
+                    opacity: value == 0 ? 1 : 0.9,
+                    child: child,
+                  ),
+                );
+              },
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Container(
+                    height: 40,
+                    width: 40,
+                    decoration: BoxDecoration(
+                      gradient: const LinearGradient(
+                        colors: [Color(0xff7B61FF), Color(0xffA855F7)],
+                      ),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: const Icon(
+                      Icons.currency_rupee,
+                      color: Colors.white,
+                      size: 20,
+                    ),
+                  ),
+                  const SizedBox(height: 30),
+                  const Text(
+                    "QuickLoan",
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 22,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  const SizedBox(height: 40),
+                  const Text(
+                    "Smart Loans\nfor Smart People",
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 42,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  const SizedBox(height: 20),
+                  const Text(
+                    "Get instant personal, home, car and business loans with minimal documentation.",
+                    style: TextStyle(
+                      color: Colors.white70,
+                      fontSize: 16,
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
-          SizedBox(height: 30),
-          Text(
-            "Reset Your\nPassword",
-            style: TextStyle(
-              color: Colors.white,
-              fontSize: 34,
-              fontWeight: FontWeight.bold,
+
+          /// RIGHT IMAGE WITH FLOATING ANIMATION
+          Expanded(
+            flex: 5,
+            child: TweenAnimationBuilder(
+              tween: Tween<double>(begin: -12, end: 12),
+              duration: const Duration(seconds: 3),
+              curve: Curves.easeInOut,
+              builder: (context, double value, child) {
+                return Transform.translate(
+                  offset: Offset(0, value),
+                  child: child,
+                );
+              },
+              child: Image.asset(
+                "assets/images/loan_signup.png",
+                height: 320,
+                fit: BoxFit.contain,
+              ),
             ),
           ),
         ],
